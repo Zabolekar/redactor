@@ -113,19 +113,6 @@ def h_reflect(matrix):
 ##### Neither generation-related nor GUI-related #####
 ######################################################
 
-def print_field(field):
-   # cutting empty rows
-   for i, row in enumerate(field):
-      if sum(row):
-         break
-   for j, row in reversed(list(enumerate(field, 1))):
-      if sum(row):
-         break
-   # TODO: cut empty columns, too
-   print("\n".join("".join(str(cell) if cell else ' ' for cell in row) for row in field[i:j]))
-   print("\n--------------------\n")
-   
-
 def fill(field, y, x, new_value):
    if new_value not in (0,5):
       raise ValueError("Can only fill with empty (0) or full (5)") # TODO: Maybe do the same to old_value
@@ -166,6 +153,7 @@ def fill(field, y, x, new_value):
    return result
 
 def field_to_contours(field):
+   field = [[5 if i>5 else i for i in row] for row in field] # coercing 5,6,7 to 5
    # TODO: check if connected
    
    # adding an empty top row, an empty bottom row, an empty right column and an empty left column
@@ -212,7 +200,6 @@ def field_to_contours(field):
          elif quadruple[3] == 2:
             quadruple[3] = 0
          # now only 256 possible quadruples remain (and some of them should never happen)
-         print(quadruple)
          if quadruple in ([0,0,0,4], [0,0,0,5], [0,2,0,5], [0,5,0,5], [3,5,0,5], [5,5,0,5], [5,5,1,5]):
             i += 1
             """
@@ -385,7 +372,7 @@ if __name__ == "__main__":
    tk_n.set(5)
    
    # layout
-   ca.grid(row=0, column=0, columnspan=3)
+   ca.grid(row=0, column=0, columnspan=2)
    Label(root, text="Number of cells: ").grid(row=1, column=0, sticky="e")
    sb.grid(row=1, column=1, sticky="w")
    next_b.grid(row=1, column=2)
@@ -403,6 +390,7 @@ if __name__ == "__main__":
             cmb.destroy()
          cmb.protocol('WM_DELETE_WINDOW', on_close)
          cmbca = Canvas(cmb, width=w, height=h)
+         prvw = Canvas(cmb, width=400, height=h)
          cmbca.bind("<ButtonPress-1>", lambda e: cmbca.scan_mark(e.x, e.y))
          cmbca.bind("<B1-Motion>", lambda e: cmbca.scan_dragto(e.x, e.y, gain=1))
          tk_m = IntVar()
@@ -447,13 +435,14 @@ if __name__ == "__main__":
                m -= 1
                zn += n
             cmbca.create_rectangle(n * a, zy, zx + n * a, zy + zx)
+            previewb['state'] = 'normal'
+            exportb['state'] = 'normal'
          
          def export():
             from tkinter import filedialog
             fn = filedialog.asksaveasfilename(defaultextension=".txt", initialfile="puzzle.txt", parent=cmb, title="Append figure to file")
             if fn:
-               six_states = [[5 if i>5 else i for i in row] for row in field]
-               contours = field_to_contours(six_states)
+               contours = field_to_contours(field)
                with open(fn, 'a') as f:
                   f.write('new <Vector.<Vertex>>[')
                   for contour in contours:
@@ -461,17 +450,31 @@ if __name__ == "__main__":
                      f.write(', '.join('new Vertex{}'.format(xy) for xy in contour))
                      f.write('],')
                   f.write("]\n")
-               print_field(six_states)
-               
+         
+         def preview():
+            prvw.delete("all")
+            contours = field_to_contours(field)
+            for contour in contours:
+               x, y = zip(*((i*50+200, j*50+200) for i,j in contour))
+               i, N = 0, len(contour)-1
+               while i < N:
+                  prvw.create_line(x[i], y[i], x[i+1], y[i+1], arrow="last", width=2)
+                  i += 1
+         
+         previewb = Button(cmb, text="Preview: what will be exported?", command=preview)
+         previewb['state'] = 'disabled'
          exportb = Button(cmb, text="Export figure as <Vector.<Vertex>> (append)", command=export)
+         exportb['state'] = 'disabled'
          
          # layout
          Label(cmb, text="Select a figure, then press arrows to move it, r to rotate, h or v to reflect across the corresponding axis").grid(row=0, column=0, columnspan=4)
          cmbca.grid(row=1, column=0, columnspan=4)
+         prvw.grid(row=1, column=4)
          Label(cmb, text="Number of figures: ").grid(row=2, column=0, sticky="e")
          Spinbox(cmb, from_=1, to=20, textvariable=tk_m).grid(row=2, column=1, sticky="w")
          Button(cmb, text="Place", command=pl).grid(row=2, column=2)
-         exportb.grid(row=2, column=3)
+         previewb.grid(row=2, column=3)
+         exportb.grid(row=2, column=4)
          
          def transform(kind):
             from copy import deepcopy
