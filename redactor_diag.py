@@ -152,54 +152,64 @@ def fill(field, y, x, new_value):
             result[y][x] = new_value
    return result
 
+def find_zeroth_vertex(field):
+   # currently: find the leftmost of the uppermost filled cells
+   for i, row in enumerate(field):
+      for j, cell in enumerate(row):
+         if cell:
+            return j, i
+   
+def normalize_quadruple(quadruple):
+   # THIS FUNCTION MUTATES ITS ARGUMENT (and returns None)
+   # There are 6^4 = 1296 possible quadruples to consider (although some of them, like 0000 or 5555, should never happen)
+   # it would not be wise to list all of them as we did in older redactor versions, without diagonals
+   # So we do it a bit differently:
+   if quadruple[0] == 1:
+      quadruple[0] = 0
+   elif quadruple[0] == 2:
+      quadruple[0] = 5
+   if quadruple[1] == 3:
+      quadruple[1] = 0
+   elif quadruple[1] == 4:
+      quadruple[1] = 5
+   if quadruple[2] == 3:
+      quadruple[2] = 5
+   elif quadruple[2] == 4:
+      quadruple[2] = 0
+   if quadruple[3] == 1:
+      quadruple[3] = 5
+   elif quadruple[3] == 2:
+      quadruple[3] = 0
+   # now only 256 possible quadruples remain (and some of them should never happen)
+
+def get_quadruple(field, i, j):
+   nrows, ncols = get_dims(field)
+   return [field[i - 1][j - 1] if i > 0 and j > 0 else 0,
+           field[i - 1][j] if i > 0 and j < ncols else 0,
+           field[i][j - 1] if i < nrows and j > 0 else 0,
+           field[i][j] if i < nrows and j < ncols else 0]
+           
+def get_dims(field):
+   nrows, ncols = len(field), len(field[0])
+   return nrows, ncols
+   
 def field_to_contours(field):
    field = [[5 if i>5 else i for i in row] for row in field] # coercing 5,6,7 to 5
    # TODO: check if connected
    
    # adding an empty top row, an empty bottom row, an empty right column and an empty left column
    # this is done to make sure the outer empty part (without the holes) is contiguous
-   nrows, ncols = len(field) + 2, len(field[0]) + 2
-   field = [[0] * ncols] + [[0] + row + [0] for row in field] + [[0] * ncols]
+   nrows, ncols = get_dims(field)
+   field = [[0] * (ncols+2)] + [[0] + row + [0] for row in field] + [[0] * (ncols+2)]
 
    # inner function to get one of the contours
    def field_to_one_contour(field):
-      # find the leftmost of the uppermost filled cells
-      break_flag = False
-      for i, row in enumerate(field):
-         if sum(row):
-            for j, cell in enumerate(row):
-               if cell:
-                  break_flag = True
-                  break
-         if break_flag:
-            break
-      contour = [(j, i)]
+      j, i = find_zeroth_vertex(field)
+      contour = [(j,i)]
       
       while True:
-         quadruple = [field[i - 1][j - 1] if i > 0 and j > 0 else 0,
-                      field[i - 1][j] if i > 0 and j < ncols else 0,
-                      field[i][j - 1] if i < nrows and j > 0 else 0,
-                      field[i][j] if i < nrows and j < ncols else 0]
-         # There are 6^4 = 1296 possible quadruples to consider (but some of them, like 0000 or 5555, should never happen)
-         # it would not be wise to list all of them as we did in older redactor versions, without diagonals
-         # So we do it a bit differently
-         if quadruple[0] == 1:
-            quadruple[0] = 0
-         elif quadruple[0] == 2:
-            quadruple[0] = 5
-         if quadruple[1] == 3:
-            quadruple[1] = 0
-         elif quadruple[1] == 4:
-            quadruple[1] = 5
-         if quadruple[2] == 3:
-            quadruple[2] = 5
-         elif quadruple[2] == 4:
-            quadruple[2] = 0
-         if quadruple[3] == 1:
-            quadruple[3] = 5
-         elif quadruple[3] == 2:
-            quadruple[3] = 0
-         # now only 256 possible quadruples remain (and some of them should never happen)
+         quadruple = get_quadruple(field, i, j)
+         normalize_quadruple(quadruple)
          if quadruple in ([0,0,0,4], [0,0,0,5], [0,2,0,5], [0,5,0,5], [3,5,0,5], [5,5,0,5], [5,5,1,5]):
             i += 1
             """
@@ -393,6 +403,8 @@ if __name__ == "__main__":
          prvw = Canvas(cmb, width=400, height=h)
          cmbca.bind("<ButtonPress-1>", lambda e: cmbca.scan_mark(e.x, e.y))
          cmbca.bind("<B1-Motion>", lambda e: cmbca.scan_dragto(e.x, e.y, gain=1))
+         prvw.bind("<ButtonPress-1>", lambda e: prvw.scan_mark(e.x, e.y))
+         prvw.bind("<B1-Motion>", lambda e: prvw.scan_dragto(e.x, e.y, gain=1))
          tk_m = IntVar()
          
          def wrapper(tag):
@@ -452,13 +464,15 @@ if __name__ == "__main__":
                   f.write("]\n")
          
          def preview():
+            from random import randint
             prvw.delete("all")
             contours = field_to_contours(field)
             for contour in contours:
-               x, y = zip(*((i*50+200, j*50+200) for i,j in contour))
+               color = "#{:03x}".format(randint(0,4095))
+               x, y = zip(*((i*40+200, j*40+200) for i,j in contour))
                i, N = 0, len(contour)-1
                while i < N:
-                  prvw.create_line(x[i], y[i], x[i+1], y[i+1], arrow="last", width=2)
+                  prvw.create_line(x[i], y[i], x[i+1], y[i+1], arrow="last", width=2, fill=color)
                   i += 1
          
          previewb = Button(cmb, text="Preview: what will be exported?", command=preview)
