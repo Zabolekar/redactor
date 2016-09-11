@@ -116,10 +116,10 @@ def h_reflect(matrix):
 def fill(field, y, x, new_value):
    if new_value not in (0,5):
       raise ValueError("Can only fill with empty (0) or full (5)") # TODO: Maybe do the same to old_value
-   nrows, ncols = len(field), len(field[0])
+   nrows, ncols = get_dims(field)
    old_value = field[y][x]
    auxiliary_field = [['unchecked' for __ in row] for row in field]
-   # auxiliary_field cell can has three distinct values: unchecked 0, about to be checked 1, being checked now 2, checked 3
+   # auxiliary_field cell can has three distinct values: unchecked, about to be checked, being checked, checked
    auxiliary_field[y][x] = 'being checked'
    while sum('being checked' in row for row in auxiliary_field):
       for y in range(nrows):
@@ -157,7 +157,11 @@ def find_zeroth_vertex(field):
    for i, row in enumerate(field):
       for j, cell in enumerate(row):
          if cell:
-            return j, i
+            quadruple = get_quadruple(field, i, j)
+            normalize_quadruple(quadruple)
+            if quadruple != [0,0,0,0]: # TODO: add other illegal starting points
+               print("START AT", quadruple)
+               return j, i
    
 def normalize_quadruple(quadruple):
    # THIS FUNCTION MUTATES ITS ARGUMENT (and returns None)
