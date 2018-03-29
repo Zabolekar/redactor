@@ -1,3 +1,5 @@
+# for python2: from __future__ import division, int(ceil(...)) instead of ceil(...) and tkinter => Tkinter
+
 def no_empty_rows_cols(t, H, W):
    for row in range(H):
       if not 1 in (t[(row * W):((row + 1) * W)]):
@@ -339,10 +341,13 @@ if __name__ == "__main__":
       ca.yview_moveto(0)
       n = tk_n.get()
       results = list(polyominoes(n))
-      zx, zy = 0, h // 2
+      zx, zy = 10, 10
+      if a == 20:
+         sx, sy = 100, 100 # step x, step y
+      else:
+         sx, sy = 60, 60 # step x, step y
       for k, result in enumerate(results):
          tag = "p{}".format(k)
-         zx += n * a
          for i, row in enumerate(result):
             for j, cell in enumerate(row):
                if cell:
@@ -354,6 +359,10 @@ if __name__ == "__main__":
                   ca.tag_bind(tag, '<Leave>', lambda e, tag=tag:
                            [ca.itemconfig(i, fill="grey50")
                            for i in ca.find_withtag(tag)])
+         zx += sx
+         if zx > w-sx:
+            zy += sy
+            zx = 10
       gen_b.config(state="disabled")
 
    gen_b = Button(root, text="Generate", command=gen)
