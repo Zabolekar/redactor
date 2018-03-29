@@ -1,0 +1,5 @@
+This is a level editor for a game called faircut. You can generate [free polyominoes](https://en.wikipedia.org/wiki/Polyomino) of up to 8 cells, choose one of them, combine multiple copies of it into a figure, then export the figure's contour as a vector of vertices. The level editor partially supports [polyabolos](https://en.wikipedia.org/wiki/Polyabolo), however, for historicall reasons the game calls them "polyominoes with diagonals" and groups them not by the number of triangles but rather by the number of (complete or partial) squares. We also plan to add support for [polyiamonds](https://en.wikipedia.org/wiki/Polyiamond) and [polyhexes](https://en.wikipedia.org/wiki/Polyhex_(mathematics)). 
+
+This editor is not bound to the game: its output format is, although a bit bizarre, human-readable.
+
+Requires Python 3.6 or later. Doesn't need anything but the standard library. Earlier versions might work but weren't tested.
