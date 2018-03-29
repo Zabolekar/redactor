@@ -1,5 +1,3 @@
-# for python2: from __future__ import division, int(ceil(...)) instead of ceil(...) and tkinter => Tkinter
-
 def no_empty_rows_cols(t, H, W):
    for row in range(H):
       if not 1 in (t[(row * W):((row + 1) * W)]):
@@ -305,6 +303,18 @@ def field_to_contours(field):
    centered = [[(x - meanX, y - meanY) for x, y in contour] for contour in contours]
    return centered
 
+def contours_to_AS(contours):
+   outer_prefix = 'new <Vector.<Vertex>>['      
+   outer_postfix = '],\n'
+   inner_prefix = 'new <Vertex>['
+   inner_postfix = '],'
+   return (outer_prefix
+           + ''.join(inner_prefix
+                     + ', '.join('new Vertex{}'.format(xy) for xy in contour)
+                     + inner_postfix
+                     for contour in contours)
+           + outer_postfix)
+
 ###################################################################################################
 ####################################### HERE COMES THE GUI ########################################
 ###################################################################################################
@@ -422,12 +432,7 @@ if __name__ == "__main__":
             if fn:
                contours = field_to_contours(field)
                with open(fn, 'a') as f:
-                  f.write('new <Vector.<Vertex>>[')
-                  for contour in contours:
-                     f.write('new <Vertex>[')
-                     f.write(', '.join('new Vertex{}'.format(xy) for xy in contour))
-                     f.write('],')
-                  f.write("]\n")
+                  f.write(contours_to_AS(contours))
                print_field(field)
                
          exportb = Button(cmb, text="Export figure as <Vector.<Vertex>> (append)", command=export)
