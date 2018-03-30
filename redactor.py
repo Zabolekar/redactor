@@ -35,14 +35,14 @@ def connected(t: Tuple[int, ...], n: int, H: int, W: int) -> bool:
          if x+1 < W and t_mutable[(x+1)+W*y]:
             fill4(x+1, y)
 
-   for i,c in enumerate(t):
+   for i, c in enumerate(t):
       if c:
          break
 
    fill4(i%W, i//W)
-   
+
    return len([c for c in t_mutable if c == 2]) == n
-   
+
 def polyominoes(n: int) -> Iterator[Field]:
    """
    Numbering:
@@ -121,7 +121,8 @@ def fill(field: Field, y: int, x: int, new_value: int) -> Field:
    nrows, ncols = len(field), len(field[0])
    old_value = field[y][x]
    auxiliary_field = [['unchecked' for __ in row] for row in field]
-   # auxiliary_field cell can has three distinct values: unchecked 0, about to be checked 1, being checked now 2, checked 3
+   # auxiliary_field cell can have four distinct values:
+   # unchecked; about to be checked; being checked now; checked 3
    auxiliary_field[y][x] = 'being checked'
    while sum('being checked' in row for row in auxiliary_field):
       for y in range(nrows):
@@ -129,15 +130,23 @@ def fill(field: Field, y: int, x: int, new_value: int) -> Field:
             if auxiliary_field[y][x] == 'being checked':
                neighbours = []
                # regular neighbours
-               if y > 0: neighbours.append((y - 1, x))
-               if y + 1 < nrows: neighbours.append((y + 1, x))
-               if x > 0: neighbours.append((y, x - 1))
-               if x + 1 < ncols: neighbours.append((y, x + 1))
+               if y > 0:
+                  neighbours.append((y - 1, x))
+               if y + 1 < nrows:
+                  neighbours.append((y + 1, x))
+               if x > 0:
+                  neighbours.append((y, x - 1))
+               if x + 1 < ncols:
+                  neighbours.append((y, x + 1))
                # diagonal neighbours
-               if y > 0 and x > 0: neighbours.append((y - 1, x - 1))
-               if y + 1 < nrows and x > 0: neighbours.append((y + 1, x - 1))
-               if y > 0 and x + 1 < ncols: neighbours.append((y - 1, x + 1))
-               if y + 1 < nrows and x + 1 < ncols: neighbours.append((y + 1, x + 1))
+               if y > 0 and x > 0:
+                  neighbours.append((y - 1, x - 1))
+               if y + 1 < nrows and x > 0:
+                  neighbours.append((y + 1, x - 1))
+               if y > 0 and x + 1 < ncols:
+                  neighbours.append((y - 1, x + 1))
+               if y + 1 < nrows and x + 1 < ncols:
+                  neighbours.append((y + 1, x + 1))
                for ny, nx in neighbours:
                   if auxiliary_field[ny][nx] == 'unchecked' and field[ny][nx] == old_value:
                      auxiliary_field[ny][nx] = 'to be checked'
@@ -156,7 +165,7 @@ def fill(field: Field, y: int, x: int, new_value: int) -> Field:
 
 def field_to_contours(field: Field) -> Contours:
    # TODO: check if connected
-   
+
    # adding an empty top row, an empty bottom row, an empty right column and an empty left column
    # this is done to make sure the outer empty part (without the holes) is contiguous
    nrows, ncols = len(field) + 2, len(field[0]) + 2
@@ -175,7 +184,7 @@ def field_to_contours(field: Field) -> Contours:
          if break_flag:
             break
       contour = [(j, i)]
-      
+
       while True:
          quadruple = (field[i - 1][j - 1] if i > 0 and j > 0 else 0,
                       field[i - 1][j] if i > 0 and j < ncols else 0,
@@ -297,14 +306,14 @@ def field_to_contours(field: Field) -> Contours:
          if contour[-1] == contour[0]:
             break
       return contour
-   
+
    outer = field_to_one_contour(field)
    # calculate some kind of center
    meanX = round(sum(x for x, y in outer) / len(outer))
    meanY = round(sum(y for x, y in outer) / len(outer))
-   
+
    contours = [outer]
-            
+
    # fill the outer blank space, then invert
    holes_inverted = [[{1:0, 0:1}[i] for i in row] for row in fill(field, 0, 0, 1)]
 
@@ -408,7 +417,7 @@ if __name__ == "__main__":
          cmbca.bind("<ButtonPress-1>", lambda e: cmbca.scan_mark(e.x, e.y))
          cmbca.bind("<B1-Motion>", lambda e: cmbca.scan_dragto(e.x, e.y, gain=1))
          tk_m = IntVar()
-         
+
          def wrapper(tag: str) -> Callback:
             def toggle_selection(_: Event) -> None:
                global selected
@@ -418,7 +427,7 @@ if __name__ == "__main__":
                for i in cmbca.find_withtag(tag):
                   cmbca.itemconfig(i, width=2)
             return toggle_selection
-         
+
          def pl() -> None:
             global field, selected
             selected = None
@@ -448,20 +457,22 @@ if __name__ == "__main__":
                m -= 1
                zn += n
             cmbca.create_rectangle(n * a, zy, zx + n * a, zy + zx)
-         
+
          def export() -> None:
             if field is None:
                raise FieldNotInitialized
-            from tkinter import filedialog # TODO: this line only typechecks because I have a custom filedialog.pyi which I haven't contributed to typeshed yet
+            from tkinter import filedialog
+            # TODO: the previous line only typechecks because I have a
+            # custom filedialog.pyi which I haven't contributed to typeshed yet
             fn = filedialog.asksaveasfilename(defaultextension=".txt", initialfile="puzzle.txt", parent=cmb, title="Append figure to file")
             if fn:
                contours = field_to_contours(field)
                with open(fn, 'a') as f:
                   f.write(contours_to_AS(contours))
                print_field(field)
-               
+
          exportb = Button(cmb, text="Export figure as <Vector.<Vertex>> (append)", command=export)
-         
+
          # layout
          Label(cmb, text="Select a figure, then press arrows to move it, r to rotate, h or v to reflect across the corresponding axis").grid(row=0, column=0, columnspan=4)
          cmbca.grid(row=1, column=0, columnspan=4)
@@ -469,7 +480,7 @@ if __name__ == "__main__":
          Spinbox(cmb, from_=1, to=8, textvariable=tk_m).grid(row=2, column=1, sticky="w")
          Button(cmb, text="Place", command=pl).grid(row=2, column=2)
          exportb.grid(row=2, column=3)
-         
+
          def transform(kind: str) -> Callback:
             from copy import deepcopy
             from warnings import warn
@@ -484,13 +495,15 @@ if __name__ == "__main__":
                   is_translation = kind in ["up", "down", "left", "right"]
                   if is_translation:
                      dx = {"up": 0, "down": 0, "left":-1, "right": 1}[kind]
-                     dy = {"up":-1, "down": 1, "left": 0, "right": 0}[kind]               
+                     dy = {"up":-1, "down": 1, "left": 0, "right": 0}[kind]
                      for i in range(n):
                         figures[selected][i][0] += dx
                         figures[selected][i][1] += dy
                   else:
-                     xs, ys = [x for x, y in figures[selected]], [y for x, y in figures[selected]]
-                     center_x, center_y = min(xs) + (max(xs) - min(xs)) // 2, min(ys) + (max(ys) - min(ys)) // 2
+                     xs = [x for x, y in figures[selected]]
+                     ys = [y for x, y in figures[selected]]
+                     center_x = min(xs) + (max(xs) - min(xs)) // 2
+                     center_y = min(ys) + (max(ys) - min(ys)) // 2
                      for i in range(n):
                         figures[selected][i][0] -= center_x
                         figures[selected][i][1] -= center_y
@@ -501,7 +514,8 @@ if __name__ == "__main__":
                      elif kind == "reflect-":
                         figures[selected] = [[x, -y] for x, y in figures[selected]]
                      else:
-                        warn("Unknown transformation", RuntimeWarning)  # raising an exception in the middle of a transaction would be a bad idea
+                        warn("Unknown transformation", RuntimeWarning)
+                        # raising an exception in the middle of a transaction would be a bad idea
                      for i in range(n):
                         figures[selected][i][0] = int(figures[selected][i][0] + center_x)
                         figures[selected][i][1] = int(figures[selected][i][1] + center_y)
