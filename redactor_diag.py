@@ -1,14 +1,4 @@
-# not tested with python 2 at all
-# lazy (as in - does only produce a piece when you explicitly request it with "next"), does not use numpy
-
-def no_empty_rows_cols(t, H, W):
-   for row in range(H):
-      if not sum(t[(row * W):((row + 1) * W)]):
-         return False
-   for col in range(W):
-      if not sum(t[col::W]):
-         return False
-   return True
+from redactor import no_empty_rows_cols, get_dims, fill
 
 def connected(t, n, H, W):
    """
@@ -113,45 +103,6 @@ def h_reflect(matrix):
 ##### Neither generation-related nor GUI-related #####
 ######################################################
 
-def fill(field, y, x, new_value):
-   if new_value not in (0,5):
-      raise ValueError("Can only fill with empty (0) or full (5)") # TODO: Maybe do the same to old_value
-   nrows, ncols = get_dims(field)
-   old_value = field[y][x]
-   auxiliary_field = [['unchecked' for __ in row] for row in field]
-   # auxiliary_field cell can has three distinct values: unchecked, about to be checked, being checked, checked
-   auxiliary_field[y][x] = 'being checked'
-   while sum('being checked' in row for row in auxiliary_field):
-      for y in range(nrows):
-         for x in range(ncols):
-            if auxiliary_field[y][x] == 'being checked':
-               neighbours = []
-               # regular neighbours
-               if y > 0: neighbours.append((y - 1, x))
-               if y + 1 < nrows: neighbours.append((y + 1, x))
-               if x > 0: neighbours.append((y, x - 1))
-               if x + 1 < ncols: neighbours.append((y, x + 1))
-               # diagonal neighbours
-               if y > 0 and x > 0: neighbours.append((y - 1, x - 1))
-               if y + 1 < nrows and x > 0: neighbours.append((y + 1, x - 1))
-               if y > 0 and x + 1 < ncols: neighbours.append((y - 1, x + 1))
-               if y + 1 < nrows and x + 1 < ncols: neighbours.append((y + 1, x + 1))
-               for ny, nx in neighbours:
-                  if auxiliary_field[ny][nx] == 'unchecked' and field[ny][nx] == old_value:
-                     auxiliary_field[ny][nx] = 'to be checked'
-               auxiliary_field[y][x] = 'checked'
-      for y in range(nrows):
-         for x in range(ncols):
-            if auxiliary_field[y][x] == 'to be checked':
-               auxiliary_field[y][x] = 'being checked'
-   result = [[i for i in row] for row in field]  # copying
-   # actually filling:
-   for y in range(nrows):
-      for x in range(ncols):
-         if auxiliary_field[y][x] == 'checked':
-            result[y][x] = new_value
-   return result
-
 def find_zeroth_vertex(field):
    # currently: find the leftmost of the uppermost filled cells
    for i, row in enumerate(field):
@@ -192,11 +143,7 @@ def get_quadruple(field, i, j):
            field[i - 1][j] if i > 0 and j < ncols else 0,
            field[i][j - 1] if i < nrows and j > 0 else 0,
            field[i][j] if i < nrows and j < ncols else 0]
-           
-def get_dims(field):
-   nrows, ncols = len(field), len(field[0])
-   return nrows, ncols
-   
+
 def field_to_contours(field):
    field = [[5 if i>5 else i for i in row] for row in field] # coercing 5,6,7 to 5
    # TODO: check if connected

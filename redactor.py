@@ -32,12 +32,14 @@ class Transformation(Enum):
          self.dx = {1: 0, 2: 0, 3: -1, 4: 1}[value]
          self.dy = {1: -1, 2: 1, 3: 0, 4: 0}[value]
 
-def no_empty_rows_cols(t: Tuple[int, ...], H: int, W: int) -> bool:
+# we use sum because diagonals have not only 0 and 1
+# for squares without diagonals "if 1 in t[..." would suffice in both cases
+def no_empty_rows_cols(t, H, W):
    for row in range(H):
-      if not 1 in t[(row * W):((row + 1) * W)]:
+      if not sum(t[(row * W):((row + 1) * W)]):
          return False
    for col in range(W):
-      if not 1 in t[col::W]:
+      if not sum(t[col::W]):
          return False
    return True
 
@@ -138,11 +140,14 @@ def print_field(field: Field) -> None:
    print("\n\n")
 
 def fill(field: Field, y: int, x: int, new_value: int) -> Field:
-   nrows, ncols = len(field), len(field[0])
+   # new_value can be 0 or 1 in polyominoes without diagonals, 0 or 5 with diagonals.
+   # 0 means empty. 1 or 5 means full.
+   # TODO: fix this inconsistency
+   nrows, ncols = get_dims(field)
    old_value = field[y][x]
    auxiliary_field = [['unchecked' for __ in row] for row in field]
    # auxiliary_field cell can have four distinct values:
-   # unchecked; about to be checked; being checked now; checked 3
+   # unchecked; about to be checked; being checked now; checked;
    auxiliary_field[y][x] = 'being checked'
    while sum('being checked' in row for row in auxiliary_field):
       for y in range(nrows):
@@ -182,6 +187,10 @@ def fill(field: Field, y: int, x: int, new_value: int) -> Field:
          if auxiliary_field[y][x] == 'checked':
             result[y][x] = new_value
    return result
+   
+def get_dims(field: Field) -> Tuple[int, int]:
+   nrows, ncols = len(field), len(field[0])
+   return nrows, ncols
 
 def field_to_contours(field: Field) -> Contours:
    # TODO: check if connected
