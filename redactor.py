@@ -1,6 +1,13 @@
+from tkinter import Tk, Toplevel, Canvas, Label, Spinbox, Button, IntVar, Event, filedialog
+# TODO: the previous line only typechecks because I have a
+# custom filedialog.pyi which I haven't contributed to typeshed yet
 from typing import List, Tuple, Iterator, Callable, Dict, Optional
+from itertools import product
+from math import sqrt, ceil
+from copy import deepcopy
+from warnings import warn
 from io import StringIO
-from tkinter import Tk, Toplevel, Canvas, Label, Spinbox, Button, IntVar, Event
+from enum import Enum
 
 # type aliases
 Vertex = Tuple[int, int]
@@ -10,12 +17,27 @@ Row = List[int]
 Field = List[Row]
 Callback = Callable[[Event], None]
 
+class Transformation(Enum):
+   UP = 1
+   DOWN = 2
+   LEFT = 3
+   RIGHT = 4
+   ROTATE = 5
+   REFLECT_OVER_VERTICAL_AXIS = 6
+   REFLECT_OVER_HORIZONTAL_AXIS = 7
+   
+   def __init__(self, value: int) -> None:
+      self.is_translation = self.name in ["UP", "DOWN", "LEFT", "RIGHT"]
+      if self.is_translation:
+         self.dx = {1: 0, 2: 0, 3: -1, 4: 1}[value]
+         self.dy = {1: -1, 2: 1, 3: 0, 4: 0}[value]
+
 def no_empty_rows_cols(t: Tuple[int, ...], H: int, W: int) -> bool:
    for row in range(H):
-      if not 1 in (t[(row * W):((row + 1) * W)]):
+      if not 1 in t[(row * W):((row + 1) * W)]:
          return False
    for col in range(W):
-      if not 1 in (t[col::W]):
+      if not 1 in t[col::W]:
          return False
    return True
 
@@ -28,9 +50,9 @@ def connected(t: Tuple[int, ...], n: int, H: int, W: int) -> bool:
          t_mutable[xy] = 2
          if y+1 < H and t_mutable[x+W*(y+1)]:
             fill4(x, y+1)
-         if 0 < y and t_mutable[x+W*(y-1)]:
+         if y > 0 and t_mutable[x+W*(y-1)]:
             fill4(x, y-1)
-         if 0 < x and t_mutable[(x-1)+W*y]:
+         if x > 0 and t_mutable[(x-1)+W*y]:
             fill4(x-1, y)
          if x+1 < W and t_mutable[(x+1)+W*y]:
             fill4(x+1, y)
@@ -57,8 +79,6 @@ def polyominoes(n: int) -> Iterator[Field]:
    03 13 23
    """
    # TODO: ISSUE SOME WARNING FOR polyominoes(9) and above
-   from itertools import product
-   from math import sqrt, floor, ceil
    result: List[Field] = []
    for H in range(ceil(sqrt(n)), n + 1):
       for W in range(ceil(n/H), min([n + 1 - H, H]) + 1):  # W <= H and W*H >= n and W-1+H-1 <= n-1
@@ -323,16 +343,16 @@ def field_to_contours(field: Field) -> Contours:
       j, i = contour[0]
       holes_inverted = fill(holes_inverted, i, j, 0)
       contours.append(list(reversed(contour)))
-   
+
    centered = [[(x - meanX, y - meanY) for x, y in contour] for contour in contours]
    return centered
-   
+
 def contours_to_AS(contours: Contours) -> str:
    with StringIO() as f:
       f.write("new <Vector.<Vertex>>[")
       for contour in contours:
          f.write('new <Vertex>[')
-         f.write(', '.join('new Vertex{}'.format(xy) for xy in contour))
+         f.write(', '.join(f'new Vertex{xy}' for xy in contour))
          f.write('],')
       f.write("]\n")
       return f.getvalue()
@@ -370,11 +390,16 @@ if __name__ == "__main__":
       else:
          sx, sy = 60, 60 # step x, step y
       for k, result in enumerate(results):
-         tag = "p{}".format(k)
+         tag = f"p{k}"
          for i, row in enumerate(result):
             for j, cell in enumerate(row):
                if cell:
-                  ca.create_rectangle(zx + j * a, zy + i * a, zx + j * a + a, zy + i * a + a, fill="grey50", tags=tag)
+                  ca.create_rectangle(zx + j * a,
+                                      zy + i * a,
+                                      zx + j * a + a,
+                                      zy + i * a + a,
+                                      fill="grey50",
+                                      tags=tag)
                   ca.tag_bind(tag, '<ButtonPress-1>', combine(k=k, n=n))
                   ca.tag_bind(tag, '<Enter>', lambda e, tag=tag:
                            [ca.itemconfig(i, fill="red")
@@ -405,7 +430,7 @@ if __name__ == "__main__":
    figures: Dict[str, Field] = {}
    def combine(k: int, n: int) -> Callback:
       zy = n * a
-      def callback(_: Event) -> None:
+      def callback(__: Event) -> None:
          result = results[k]
          cmb = Toplevel(root)
          cmb.grab_set()
@@ -419,7 +444,7 @@ if __name__ == "__main__":
          tk_m = IntVar()
 
          def wrapper(tag: str) -> Callback:
-            def toggle_selection(_: Event) -> None:
+            def toggle_selection(__: Event) -> None:
                global selected
                selected = tag
                for i in cmbca.find_all():
@@ -438,13 +463,18 @@ if __name__ == "__main__":
             field = [[0 for __ in range(n * m)] for __ in range(n * m)]
             zx, zn = 0, 0
             while m:
-               tag = "m{}".format(m)
+               tag = f"m{m}"
                figures[tag] = []
                zx += n * a
                for i, row in enumerate(result):
                   for j, cell in enumerate(row):
                      if cell:
-                        cmbca.create_rectangle(zx + j * a, zy + i * a, zx + j * a + a, zy + i * a + a, fill="grey50", tags=tag)
+                        cmbca.create_rectangle(zx + j * a,
+                                               zy + i * a,
+                                               zx + j * a + a,
+                                               zy + i * a + a,
+                                               fill="grey50",
+                                               tags=tag)
                         field[i][zn + j] = 1
                         figures[tag].append([zn + j, i])
                         cmbca.tag_bind(tag, '<ButtonPress-1>', wrapper(tag=tag))
@@ -461,10 +491,10 @@ if __name__ == "__main__":
          def export() -> None:
             if field is None:
                raise FieldNotInitialized
-            from tkinter import filedialog
-            # TODO: the previous line only typechecks because I have a
-            # custom filedialog.pyi which I haven't contributed to typeshed yet
-            fn = filedialog.asksaveasfilename(defaultextension=".txt", initialfile="puzzle.txt", parent=cmb, title="Append figure to file")
+            fn = filedialog.asksaveasfilename(defaultextension=".txt",
+                                              initialfile="puzzle.txt",
+                                              parent=cmb,
+                                              title="Append figure to file")
             if fn:
                contours = field_to_contours(field)
                with open(fn, 'a') as f:
@@ -474,17 +504,19 @@ if __name__ == "__main__":
          exportb = Button(cmb, text="Export figure as <Vector.<Vertex>> (append)", command=export)
 
          # layout
-         Label(cmb, text="Select a figure, then press arrows to move it, r to rotate, h or v to reflect across the corresponding axis").grid(row=0, column=0, columnspan=4)
+         Label(cmb,
+               text="Select a figure, then press arrows to move it, "\
+                    "r to rotate, h or v to reflect across the "\
+                    "corresponding axis").grid(row=0, column=0, columnspan=4)
          cmbca.grid(row=1, column=0, columnspan=4)
          Label(cmb, text="Number of figures: ").grid(row=2, column=0, sticky="e")
          Spinbox(cmb, from_=1, to=8, textvariable=tk_m).grid(row=2, column=1, sticky="w")
          Button(cmb, text="Place", command=pl).grid(row=2, column=2)
          exportb.grid(row=2, column=3)
 
-         def transform(kind: str) -> Callback:
-            from copy import deepcopy
-            from warnings import warn
-            def callback(_: Event) -> None:
+         def transform(kind: Transformation) -> Callback:
+
+            def callback(__: Event) -> None:
                global field, figures
                if field is None:
                   raise FieldNotInitialized
@@ -492,13 +524,10 @@ if __name__ == "__main__":
                if selected is not None:
                   for x, y in figures[selected]:
                      field[y][x] = 0
-                  is_translation = kind in ["up", "down", "left", "right"]
-                  if is_translation:
-                     dx = {"up": 0, "down": 0, "left":-1, "right": 1}[kind]
-                     dy = {"up":-1, "down": 1, "left": 0, "right": 0}[kind]
+                  if kind.is_translation:
                      for i in range(n):
-                        figures[selected][i][0] += dx
-                        figures[selected][i][1] += dy
+                        figures[selected][i][0] += kind.dx
+                        figures[selected][i][1] += kind.dy
                   else:
                      xs = [x for x, y in figures[selected]]
                      ys = [y for x, y in figures[selected]]
@@ -507,47 +536,56 @@ if __name__ == "__main__":
                      for i in range(n):
                         figures[selected][i][0] -= center_x
                         figures[selected][i][1] -= center_y
-                     if kind == "rotate":
+                     if kind == Transformation.ROTATE:
                         figures[selected] = [[-y, x] for x, y in figures[selected]]
-                     elif kind == "reflect|":
+                     elif kind == Transformation.REFLECT_OVER_VERTICAL_AXIS:
                         figures[selected] = [[-x, y] for x, y in figures[selected]]
-                     elif kind == "reflect-":
+                     elif kind == Transformation.REFLECT_OVER_HORIZONTAL_AXIS:
                         figures[selected] = [[x, -y] for x, y in figures[selected]]
-                     else:
+                     else: # should never happen
                         warn("Unknown transformation", RuntimeWarning)
                         # raising an exception in the middle of a transaction would be a bad idea
                      for i in range(n):
-                        figures[selected][i][0] = int(figures[selected][i][0] + center_x)
-                        figures[selected][i][1] = int(figures[selected][i][1] + center_y)
+                        figures[selected][i][0] = figures[selected][i][0] + center_x
+                        figures[selected][i][1] = figures[selected][i][1] + center_y
                   # validation
                   for x, y in figures[selected]:
                      try:
-                        if x < 0 or y < 0:  # would disrespect field boundaries
+                        if x < 0 or y < 0:  # would violate field boundaries
                            raise IndexError
                         if field[y][x]:
-                           # raises IndexError if y or x too large (so they disrespect field boundaries)
-                           # if True than it means collision with another figure
+                           # if it raises IndexError:
+                           # it means y or x are too large
+                           # and violate field boundaries
+                           # if field[y][x] is True:
+                           # it means collision with another figure
                            raise IndexError
                         field[y][x] += 1
-                     except IndexError:  # has disrespected boundaries in one way or another
+                     except IndexError:  # has violated boundaries in one way or another
                         field, figures = backup  # restoring
                         return
-                  if is_translation:
-                     cmbca.move(selected, dx * a, dy * a)
+                  if kind.is_translation:
+                     cmbca.move(selected, kind.dx * a, kind.dy * a)
                   else:
                      cmbca.delete(selected)
                      for x, y in figures[selected]:
-                        cmbca.create_rectangle((n + x) * a, y * a + zy, (n + x + 1) * a, (y + 1) * a + zy, fill="grey50", tags=selected)
+                        cmbca.create_rectangle((n + x) * a,
+                                               y * a + zy,
+                                               (n + x + 1) * a,
+                                               (y + 1) * a + zy,
+                                               fill="grey50",
+                                               tags=selected)
                         for i in cmbca.find_withtag(selected):
                            cmbca.itemconfig(i, width=2)
             return callback
-         cmb.bind('<Up>', transform("up"))
-         cmb.bind('<Down>', transform("down"))
-         cmb.bind('<Left>', transform("left"))
-         cmb.bind('<Right>', transform("right"))
-         cmb.bind('r', transform("rotate"))
-         cmb.bind('h', transform("reflect-"))
-         cmb.bind('v', transform("reflect|"))
+
+         cmb.bind('<Up>', transform(Transformation.UP))
+         cmb.bind('<Down>', transform(Transformation.DOWN))
+         cmb.bind('<Left>', transform(Transformation.LEFT))
+         cmb.bind('<Right>', transform(Transformation.RIGHT))
+         cmb.bind('r', transform(Transformation.ROTATE))
+         cmb.bind('h', transform(Transformation.REFLECT_OVER_HORIZONTAL_AXIS))
+         cmb.bind('v', transform(Transformation.REFLECT_OVER_VERTICAL_AXIS))
       return callback
 
    root.mainloop()
