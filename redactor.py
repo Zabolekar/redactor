@@ -1,6 +1,16 @@
-# for python2: from __future__ import division, int(ceil(...)) instead of ceil(...) and tkinter => Tkinter
+from typing import List, Tuple, Iterator, Callable, Dict, Optional
+from io import StringIO
+from tkinter import Tk, Toplevel, Canvas, Label, Spinbox, Button, IntVar, Event
 
-def no_empty_rows_cols(t, H, W):
+# type aliases
+Vertex = Tuple[int, int]
+Contour = List[Vertex]
+Contours = List[Contour]
+Row = List[int]
+Field = List[Row]
+Callback = Callable[[Event], None]
+
+def no_empty_rows_cols(t: Tuple[int, ...], H: int, W: int) -> bool:
    for row in range(H):
       if not 1 in (t[(row * W):((row + 1) * W)]):
          return False
@@ -9,9 +19,10 @@ def no_empty_rows_cols(t, H, W):
          return False
    return True
 
-def connected(t, n, H, W):
+def connected(t: Tuple[int, ...], n: int, H: int, W: int) -> bool:
    t_mutable = list(t)
-   def fill4(x, y):
+
+   def fill4(x: int, y: int) -> None:
       xy = x+W*y
       if t_mutable[xy] == 1:
          t_mutable[xy] = 2
@@ -23,14 +34,16 @@ def connected(t, n, H, W):
             fill4(x-1, y)
          if x+1 < W and t_mutable[(x+1)+W*y]:
             fill4(x+1, y)
+
    for i,c in enumerate(t):
       if c:
          break
+
    fill4(i%W, i//W)
-   result = len([c for c in t_mutable if c == 2]) == n
-   return result
    
-def polyominoes(n):
+   return len([c for c in t_mutable if c == 2]) == n
+   
+def polyominoes(n: int) -> Iterator[Field]:
    """
    Numbering:
    0 1 2
@@ -46,7 +59,7 @@ def polyominoes(n):
    # TODO: ISSUE SOME WARNING FOR polyominoes(9) and above
    from itertools import product
    from math import sqrt, floor, ceil
-   result = []
+   result: List[Field] = []
    for H in range(ceil(sqrt(n)), n + 1):
       for W in range(ceil(n/H), min([n + 1 - H, H]) + 1):  # W <= H and W*H >= n and W-1+H-1 <= n-1
          for t in product([0, 1], repeat=H * W):
@@ -76,15 +89,15 @@ def polyominoes(n):
                result.append(polyomino)
                yield polyomino
 
-def rotate(matrix):
+def rotate(matrix: Field) -> Field:
    "rotates by 90 degrees"
    return [list(row[::-1]) for row in zip(*matrix)]
 
-def v_reflect(matrix):
+def v_reflect(matrix: Field) -> Field:
    "reflects across the vertical axis"
    return [row[::-1] for row in matrix]
 
-def h_reflect(matrix):
+def h_reflect(matrix: Field) -> Field:
    "reflects across the horizontal axis"
    return matrix[::-1]
 
@@ -92,7 +105,7 @@ def h_reflect(matrix):
 ##### Neither generation-related nor GUI-related #####
 ######################################################
 
-def print_field(field):
+def print_field(field: Field) -> None:
    # cutting empty rows
    for i, row in enumerate(field):
       if sum(row):
@@ -104,7 +117,7 @@ def print_field(field):
    print("\n".join("".join('#' if cell else ' ' for cell in row) for row in field[i:j]))
    print("\n\n")
 
-def fill(field, y, x, new_value):
+def fill(field: Field, y: int, x: int, new_value: int) -> Field:
    nrows, ncols = len(field), len(field[0])
    old_value = field[y][x]
    auxiliary_field = [['unchecked' for __ in row] for row in field]
@@ -133,7 +146,7 @@ def fill(field, y, x, new_value):
          for x in range(ncols):
             if auxiliary_field[y][x] == 'to be checked':
                auxiliary_field[y][x] = 'being checked'
-   result = [[i for i in row] for row in field]  # copying
+   result = [row[:] for row in field]  # copying
    # actually filling:
    for y in range(nrows):
       for x in range(ncols):
@@ -141,7 +154,7 @@ def fill(field, y, x, new_value):
             result[y][x] = new_value
    return result
 
-def field_to_contours(field):
+def field_to_contours(field: Field) -> Contours:
    # TODO: check if connected
    
    # adding an empty top row, an empty bottom row, an empty right column and an empty left column
@@ -150,7 +163,7 @@ def field_to_contours(field):
    field = [[0] * ncols] + [[0] + row + [0] for row in field] + [[0] * ncols]
 
    # inner function to get one of the contours
-   def field_to_one_contour(field):
+   def field_to_one_contour(field: Field) -> Contour:
       # find the leftmost of the uppermost filled cells
       break_flag = False
       for i, row in enumerate(field):
@@ -300,28 +313,29 @@ def field_to_contours(field):
       contour = field_to_one_contour(holes_inverted)
       j, i = contour[0]
       holes_inverted = fill(holes_inverted, i, j, 0)
-      contours.append(reversed(contour))            
+      contours.append(list(reversed(contour)))
    
    centered = [[(x - meanX, y - meanY) for x, y in contour] for contour in contours]
    return centered
-
-def contours_to_AS(contours):
-   outer_prefix = 'new <Vector.<Vertex>>['      
-   outer_postfix = '],\n'
-   inner_prefix = 'new <Vertex>['
-   inner_postfix = '],'
-   return (outer_prefix
-           + ''.join(inner_prefix
-                     + ', '.join('new Vertex{}'.format(xy) for xy in contour)
-                     + inner_postfix
-                     for contour in contours)
-           + outer_postfix)
+   
+def contours_to_AS(contours: Contours) -> str:
+   with StringIO() as f:
+      f.write("new <Vector.<Vertex>>[")
+      for contour in contours:
+         f.write('new <Vertex>[')
+         f.write(', '.join('new Vertex{}'.format(xy) for xy in contour))
+         f.write('],')
+      f.write("]\n")
+      return f.getvalue()
 
 ###################################################################################################
 ####################################### HERE COMES THE GUI ########################################
 ###################################################################################################
 
-from tkinter import Tk, Toplevel, Canvas, Label, Spinbox, Button, IntVar
+class FieldNotInitialized(RuntimeError):
+   def __init__(self) -> None:
+      super().__init__()
+      self.message = "For some reason field is still None"
 
 if __name__ == "__main__":
    root = Tk()
@@ -334,7 +348,7 @@ if __name__ == "__main__":
    ca.bind("<B1-Motion>", lambda e: ca.scan_dragto(e.x, e.y, gain=1))
 
    results = None
-   def gen():
+   def gen() -> None:
       global results
       ca.delete('all')
       ca.xview_moveto(0)
@@ -377,16 +391,16 @@ if __name__ == "__main__":
    sb.grid(row=1, column=1, sticky="w")
    gen_b.grid(row=1, column=2)
 
-   field = None
-   selected = None
-   figures = {}
-   def combine(k, n):
+   field: Optional[Field] = None
+   selected: Optional[str] = None
+   figures: Dict[str, Field] = {}
+   def combine(k: int, n: int) -> Callback:
       zy = n * a
-      def callback(e):
+      def callback(_: Event) -> None:
          result = results[k]
          cmb = Toplevel(root)
          cmb.grab_set()
-         def on_close():
+         def on_close() -> None:
             cmb.grab_release()
             cmb.destroy()
          cmb.protocol('WM_DELETE_WINDOW', on_close)
@@ -395,8 +409,8 @@ if __name__ == "__main__":
          cmbca.bind("<B1-Motion>", lambda e: cmbca.scan_dragto(e.x, e.y, gain=1))
          tk_m = IntVar()
          
-         def wrapper(tag):
-            def toggle_selection(e):
+         def wrapper(tag: str) -> Callback:
+            def toggle_selection(_: Event) -> None:
                global selected
                selected = tag
                for i in cmbca.find_all():
@@ -405,7 +419,7 @@ if __name__ == "__main__":
                   cmbca.itemconfig(i, width=2)
             return toggle_selection
          
-         def pl():
+         def pl() -> None:
             global field, selected
             selected = None
             cmbca.delete('all')
@@ -435,8 +449,10 @@ if __name__ == "__main__":
                zn += n
             cmbca.create_rectangle(n * a, zy, zx + n * a, zy + zx)
          
-         def export():
-            from tkinter import filedialog
+         def export() -> None:
+            if field is None:
+               raise FieldNotInitialized
+            from tkinter import filedialog # TODO: this line only typechecks because I have a custom filedialog.pyi which I haven't contributed to typeshed yet
             fn = filedialog.asksaveasfilename(defaultextension=".txt", initialfile="puzzle.txt", parent=cmb, title="Append figure to file")
             if fn:
                contours = field_to_contours(field)
@@ -454,15 +470,17 @@ if __name__ == "__main__":
          Button(cmb, text="Place", command=pl).grid(row=2, column=2)
          exportb.grid(row=2, column=3)
          
-         def transform(kind):
+         def transform(kind: str) -> Callback:
             from copy import deepcopy
             from warnings import warn
-            def callback(e):
+            def callback(_: Event) -> None:
                global field, figures
-               backup = [deepcopy(field), deepcopy(figures)]
-               if selected:
+               if field is None:
+                  raise FieldNotInitialized
+               backup = deepcopy(field), deepcopy(figures)
+               if selected is not None:
                   for x, y in figures[selected]:
-                        field[y][x] = 0
+                     field[y][x] = 0
                   is_translation = kind in ["up", "down", "left", "right"]
                   if is_translation:
                      dx = {"up": 0, "down": 0, "left":-1, "right": 1}[kind]
@@ -472,7 +490,7 @@ if __name__ == "__main__":
                         figures[selected][i][1] += dy
                   else:
                      xs, ys = [x for x, y in figures[selected]], [y for x, y in figures[selected]]
-                     center_x, center_y = min(xs) + (max(xs) - min(xs)) / 2, min(ys) + (max(ys) - min(ys)) / 2
+                     center_x, center_y = min(xs) + (max(xs) - min(xs)) // 2, min(ys) + (max(ys) - min(ys)) // 2
                      for i in range(n):
                         figures[selected][i][0] -= center_x
                         figures[selected][i][1] -= center_y
