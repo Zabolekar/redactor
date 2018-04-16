@@ -34,7 +34,7 @@ class Transformation(Enum):
 
 # we use sum because diagonals have not only 0 and 1
 # for squares without diagonals "if 1 in t[..." would suffice in both cases
-def no_empty_rows_cols(t, H, W):
+def no_empty_rows_cols(t: Tuple[int, ...], H: int, W: int) -> bool:
    for row in range(H):
       if not sum(t[(row * W):((row + 1) * W)]):
          return False
