@@ -81,7 +81,6 @@ def polyominoes(n: int) -> Iterator[Field]:
    02 12 22
    03 13 23
    """
-   # TODO: ISSUE SOME WARNING FOR polyominoes(9) and above
    results: List[Field] = []
    for H in range(ceil(sqrt(n)), n + 1):
       for W in range(ceil(n/H), min([n + 1 - H, H]) + 1):  # W <= H and W*H >= n and W-1+H-1 <= n-1
