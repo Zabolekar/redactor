@@ -1,6 +1,5 @@
 from tkinter import Tk, Toplevel, Canvas, Label, Spinbox, Button, IntVar, Event, filedialog
-# TODO: the previous line only typechecks because I have a
-# custom filedialog.pyi which I haven't contributed to typeshed yet
+from tkinter import messagebox # type: ignore
 from typing import List, Tuple, Iterator, Callable, Dict, Optional
 from itertools import product
 from math import sqrt, ceil
@@ -8,6 +7,8 @@ from copy import deepcopy
 from warnings import warn
 from io import StringIO
 from enum import Enum
+
+EAGER = True
 
 # type aliases
 Vertex = Tuple[int, int]
@@ -81,7 +82,7 @@ def polyominoes(n: int) -> Iterator[Field]:
    03 13 23
    """
    # TODO: ISSUE SOME WARNING FOR polyominoes(9) and above
-   result: List[Field] = []
+   results: List[Field] = []
    for H in range(ceil(sqrt(n)), n + 1):
       for W in range(ceil(n/H), min([n + 1 - H, H]) + 1):  # W <= H and W*H >= n and W-1+H-1 <= n-1
          for t in product([0, 1], repeat=H * W):
@@ -89,26 +90,26 @@ def polyominoes(n: int) -> Iterator[Field]:
                polyomino = [[t[x + W * y] for x in range(W)] for y in range(H)]
                # check symmetries
                v_reflected = v_reflect(polyomino)
-               if v_reflected in result:
+               if v_reflected in results:
                   continue
                h_reflected = h_reflect(polyomino)
-               if h_reflected in result:
+               if h_reflected in results:
                   continue
                vh_reflected = h_reflect(v_reflected)
-               if vh_reflected in result:
+               if vh_reflected in results:
                   continue
                # if it is square, then additionally check rotations of every one of the four by 90
                if len(polyomino) == len(polyomino[0]):
-                  if rotate(polyomino) in result:
+                  if rotate(polyomino) in results:
                      continue
-                  if rotate(v_reflected) in result:
+                  if rotate(v_reflected) in results:
                      continue
-                  if rotate(h_reflected) in result:
+                  if rotate(h_reflected) in results:
                      continue
-                  if rotate(vh_reflected) in result:
+                  if rotate(vh_reflected) in results:
                      continue
                # finally, if we didn't find any transformation of it in our list
-               result.append(polyomino)
+               results.append(polyomino)
                yield polyomino
 
 def rotate(matrix: Field) -> Field:
@@ -385,21 +386,28 @@ if __name__ == "__main__":
    ca.bind("<ButtonPress-1>", lambda e: ca.scan_mark(e.x, e.y))
    ca.bind("<B1-Motion>", lambda e: ca.scan_dragto(e.x, e.y, gain=1))
 
-   results = None
+   lazy_results = None
    def gen() -> None:
-      global results
+      global lazy_results
       ca.delete('all')
       ca.xview_moveto(0)
       ca.yview_moveto(0)
       n = tk_n.get()
-      results = list(polyominoes(n))
+      if EAGER and n > 8:
+         if not messagebox.askyesno("Too big", "Polyominoes with more than 8 cells can take a loooot of time in eager mode. Proceed anyway?"):
+            return
+
+      if lazy_results == None:
+         lazy_results = polyominoes(n)
+
       zx, zy = 10, 10
-      if a == 20:
-         sx, sy = 100, 100 # step x, step y
-      else:
-         sx, sy = 60, 60 # step x, step y
-      for k, result in enumerate(results):
-         tag = f"p{k}"
+
+      def draw(result: Field, k: Optional[int] = None) -> None:
+         if k == None:
+            tag = "p"
+         else:
+            tag = f"p{k}"
+
          for i, row in enumerate(result):
             for j, cell in enumerate(row):
                if cell:
@@ -409,24 +417,44 @@ if __name__ == "__main__":
                                       zy + i * a + a,
                                       fill="grey50",
                                       tags=tag)
-                  ca.tag_bind(tag, '<ButtonPress-1>', combine(k=k, n=n))
+                  ca.tag_bind(tag, '<ButtonPress-1>', combine(n=n, result=result))
                   ca.tag_bind(tag, '<Enter>', lambda e, tag=tag:
                            [ca.itemconfig(i, fill="red")
                            for i in ca.find_withtag(tag)])
                   ca.tag_bind(tag, '<Leave>', lambda e, tag=tag:
                            [ca.itemconfig(i, fill="grey50")
                            for i in ca.find_withtag(tag)])
-         zx += sx
-         if zx > w-sx:
-            zy += sy
-            zx = 10
-      gen_b.config(state="disabled")
+
+      if EAGER:
+         if a == 20:
+            sx, sy = 100, 100 # step x, step y
+         else:
+            sx, sy = 60, 60 # step x, step y
+         for k, result in enumerate(lazy_results):
+            draw(result, k)
+            zx += sx
+            if zx > w-sx:
+               zy += sy
+               zx = 10
+         gen_b.config(state="disabled")
+      else:
+         try:
+            result = next(lazy_results)
+            draw(result)
+         except StopIteration:
+            gen_b.config(state="disabled")
+            messagebox.showinfo("No more pieces", "No more pieces, try another number of cells")
 
    gen_b = Button(root, text="Generate", command=gen)
 
    tk_n = IntVar()
-   tk_n.trace("w", lambda *args: gen_b.config(state="active"))
-   sb = Spinbox(root, from_=1, to=8, textvariable=tk_n)
+   def on_set_n(name1: str, name2: str, op: str) -> None:
+      global lazy_results
+      lazy_results = polyominoes(tk_n.get())
+      gen_b.config(state="active")
+
+   tk_n.trace("w", on_set_n)
+   sb = Spinbox(root, from_=1, to=20, textvariable=tk_n) # TODO: 20 is a dumb artificial restriction
 
    # layout
    ca.grid(row=0, column=0, columnspan=3)
@@ -437,10 +465,9 @@ if __name__ == "__main__":
    field: Optional[Field] = None
    selected: Optional[str] = None
    figures: Dict[str, Field] = {}
-   def combine(k: int, n: int) -> Callback:
+   def combine(n: int, result: Field) -> Callback:
       zy = n * a
       def callback(__: Event) -> None:
-         result = results[k]
          cmb = Toplevel(root)
          cmb.grab_set()
          def on_close() -> None:
