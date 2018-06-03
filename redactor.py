@@ -1,5 +1,4 @@
-from tkinter import Tk, Toplevel, Canvas, Label, Spinbox, Button, IntVar, Event, filedialog
-from tkinter import messagebox # type: ignore
+from tkinter import Tk, Toplevel, Canvas, Label, Spinbox, Button, IntVar, Event, filedialog, messagebox
 from typing import List, Tuple, Iterator, Callable, Dict, Optional
 from itertools import product
 from math import sqrt, ceil
@@ -26,7 +25,7 @@ class Transformation(Enum):
    ROTATE = 5
    REFLECT_OVER_VERTICAL_AXIS = 6
    REFLECT_OVER_HORIZONTAL_AXIS = 7
-   
+
    def __init__(self, value: int) -> None:
       self.is_translation = self.name in ["UP", "DOWN", "LEFT", "RIGHT"]
       if self.is_translation:
@@ -468,9 +467,9 @@ if __name__ == "__main__":
       zy = n * a
       def callback(__: Event) -> None:
          cmb = Toplevel(root)
-         cmb.grab_set()
+         #cmb.grab_set()
          def on_close() -> None:
-            cmb.grab_release()
+            #cmb.grab_release()
             cmb.destroy()
          cmb.protocol('WM_DELETE_WINDOW', on_close)
          cmbca = Canvas(cmb, width=w, height=h)

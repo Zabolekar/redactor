@@ -345,9 +345,9 @@ if __name__ == "__main__":
       zy = n * a
       def callback(e):
          cmb = Toplevel(root)
-         cmb.grab_set()
+         #cmb.grab_set()
          def on_close():
-            cmb.grab_release()
+            #cmb.grab_release()
             cmb.destroy()
          cmb.protocol('WM_DELETE_WINDOW', on_close)
          cmbca = Canvas(cmb, width=w, height=h)
