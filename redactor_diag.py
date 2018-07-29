@@ -1,6 +1,14 @@
-from redactor import no_empty_rows_cols, get_dims, fill
+from tkinter import Tk, Toplevel, Canvas, Label, Spinbox, Button, IntVar, Event, filedialog, messagebox
+from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
+from itertools import product
+from math import sqrt, floor, ceil
+from copy import deepcopy
+from warnings import warn
+from random import randint
+from redactor import (no_empty_rows_cols, get_dims, fill,
+                      Vertex, Contour, Contours, Row, Field, Callback)
 
-def connected(t, n, H, W):
+def connected(t: Tuple[int, ...], n: int, H: int, W: int) -> bool:
    """
    '  '	0
    '|/'	1
@@ -10,7 +18,7 @@ def connected(t, n, H, W):
    '|_|'	5
    """
    t_mutable = list(t)
-   def fill4(x, y):
+   def fill4(x: int, y: int) -> None:
       xy = x+W*y
       if t_mutable[xy] > 0:
          me = t_mutable[xy]
@@ -31,14 +39,16 @@ def connected(t, n, H, W):
             nb = t_mutable[(x+1)+W*y]
             if me in (2,3,5) and nb in (1,4,5):
                fill4(x+1, y)
+
    for i,c in enumerate(t):
       if c:
          break
+
    fill4(i%W, i//W)
    result = len([c for c in t_mutable if c < 0]) == n
    return result
    
-def polyominoes(n):
+def polyominoes(n: int) -> Iterator[Field]:
    """
    Numbering:
    0 1 2
@@ -51,14 +61,12 @@ def polyominoes(n):
    02 12 22
    03 13 23
    """
-   from itertools import product
-   from math import sqrt, floor, ceil
-   result = set()
+   result: Set[Field] = set()
    for H in range(ceil(sqrt(n)), n + 1):
       for W in range(ceil(n/H), min([n + 1 - H, H]) + 1):  # W <= H and W*H >= n and W-1+H-1 <= n-1
          for t in product(range(6), repeat=H * W):
             if sum(1 for i in t if i) == n and no_empty_rows_cols(t, H, W) and connected(t, n, H, W):
-               polyomino = tuple(tuple(t[x + W * y] for x in range(W)) for y in range(H))
+               polyomino = [[t[x + W * y] for x in range(W)] for y in range(H)]
                # TODO: maybe profile how much time is actually spent here with checking the symmetries
                # ESPECIALLY for longer lists towards their end
                v_reflected = v_reflect(polyomino)
@@ -84,26 +92,26 @@ def polyominoes(n):
                result.add(polyomino)
                yield polyomino
 
-def rotate(matrix):
+def rotate(matrix: Field) -> Field:
    "rotates by 90 degrees clockwise"
    d = {0:0, 1:3, 2:4, 3:2, 4:1, 5:5}
-   return tuple(tuple(d[elem] for elem in row[::-1]) for row in zip(*matrix))
+   return [[d[elem] for elem in row[::-1]] for row in zip(*matrix)]
 
-def v_reflect(matrix):
+def v_reflect(matrix: Field) -> Field:
    "reflects across the vertical axis"
    d = {0:0, 1:3, 2:4, 3:1, 4:2, 5:5}
-   return tuple(tuple(d[elem] for elem in row[::-1]) for row in matrix)
+   return [[d[elem] for elem in row[::-1]] for row in matrix]
 
-def h_reflect(matrix):
+def h_reflect(matrix: Field) -> Field:
    "reflects across the horizontal axis"
    d = {0:0, 1:4, 2:3, 3:2, 4:1, 5:5}
-   return tuple(tuple(d[elem] for elem in row) for row in matrix[::-1])
+   return [[d[elem] for elem in row] for row in matrix[::-1]]
 
 ######################################################
 ##### Neither generation-related nor GUI-related #####
 ######################################################
 
-def find_zeroth_vertex(field):
+def find_zeroth_vertex(field: Field) -> Optional[Tuple[int, int]]:
    # currently: find the leftmost of the uppermost filled cells
    for i, row in enumerate(field):
       for j, cell in enumerate(row):
@@ -113,9 +121,13 @@ def find_zeroth_vertex(field):
             if quadruple != [0,0,0,0]: # TODO: add other illegal starting points
                print("START AT", quadruple)
                return j, i
+   return None
    
-def normalize_quadruple(quadruple):
-   # THIS FUNCTION MUTATES ITS ARGUMENT (and returns None)
+def normalize_quadruple(quadruple: List[int]) -> None:
+   """THIS FUNCTION MUTATES ITS ARGUMENT"""
+   # Validate quadruple, just in case:
+   if len(quadruple) != 4:
+      raise ValueError(f"Invalid quadruple {quadruple}")
    # There are 6^4 = 1296 possible quadruples to consider (although some of them, like 0000 or 5555, should never happen)
    # it would not be wise to list all of them as we did in older redactor versions, without diagonals
    # So we do it a bit differently:
@@ -137,14 +149,14 @@ def normalize_quadruple(quadruple):
       quadruple[3] = 0
    # now only 256 possible quadruples remain (and some of them should never happen)
 
-def get_quadruple(field, i, j):
+def get_quadruple(field: Field, i: int, j: int) -> List[int]:
    nrows, ncols = get_dims(field)
    return [field[i - 1][j - 1] if i > 0 and j > 0 else 0,
            field[i - 1][j] if i > 0 and j < ncols else 0,
            field[i][j - 1] if i < nrows and j > 0 else 0,
            field[i][j] if i < nrows and j < ncols else 0]
 
-def field_to_contours(field):
+def field_to_contours(field: Field) -> Contours:
    field = [[5 if i>5 else i for i in row] for row in field] # coercing 5,6,7 to 5
    # TODO: check if connected
    
@@ -154,8 +166,11 @@ def field_to_contours(field):
    field = [[0] * (ncols+2)] + [[0] + row + [0] for row in field] + [[0] * (ncols+2)]
 
    # inner function to get one of the contours
-   def field_to_one_contour(field):
-      j, i = find_zeroth_vertex(field)
+   def field_to_one_contour(field: Field) -> Contour:
+      ji = find_zeroth_vertex(field)
+      if ji is None:
+         raise ValueError("Can't find zeroth vertex, this is a bug")
+      j, i = ji
       contour = [(j,i)]
       
       while True:
@@ -261,7 +276,7 @@ def field_to_contours(field):
       contour = field_to_one_contour(holes_inverted)
       j, i = contour[0]
       holes_inverted = fill(holes_inverted, i, j, 0)
-      contours.append(reversed(contour))            
+      contours.append(list(reversed(contour)))
    
    centered = [[(x - meanX, y - meanY) for x, y in contour] for contour in contours]
    return centered
@@ -270,11 +285,11 @@ def field_to_contours(field):
 ####################################### HERE COMES THE GUI ########################################
 ###################################################################################################
 
-from tkinter import Tk, Toplevel, Canvas, Label, Spinbox, Button, IntVar, messagebox
-
 compatibles = [(0,i) for i in range(1,6)]
 compatibles.extend([(1,2), (3,4)])
 compatibles.extend([(j,i) for (i,j) in compatibles])
+
+result: Field
 
 if __name__ == "__main__":
    root = Tk()
@@ -286,7 +301,7 @@ if __name__ == "__main__":
    ca.bind("<ButtonPress-1>", lambda e: ca.scan_mark(e.x, e.y))
    ca.bind("<B1-Motion>", lambda e: ca.scan_dragto(e.x, e.y, gain=1))
    
-   def paint_cell(cell, canvas, x0, y0, i, j, tag):
+   def paint_cell(cell: int, canvas: Canvas, x0: int, y0: int, i: int, j: int, tag: str) -> None:
       if cell == 5:
          canvas.create_rectangle(x0+j*a, y0+i*a, x0+j*a+a, y0+i*a+a, fill="grey50", tags=tag)
       elif cell == 4:
@@ -298,13 +313,15 @@ if __name__ == "__main__":
       elif cell == 1:
          canvas.create_polygon(x0+j*a, y0+i*a, x0+j*a+a, y0+i*a, x0+j*a, y0+i*a+a, fill="grey50", tags=tag, outline = "black")
 
-   results = None # will turn into a polyominoes generator later
-   def next_piece():
+   results: Optional[Iterator[Field]] = None # will turn into a polyominoes generator later
+   def next_piece() -> None:
       global result
       ca.delete('all')
       ca.xview_moveto(0)
       ca.yview_moveto(0)
       try:
+         if results is None:
+            raise ValueError("This is a bug, we forgot to initialize results")
          result = next(results)
       except StopIteration:
          next_b.config(state="disabled")
@@ -324,10 +341,11 @@ if __name__ == "__main__":
    next_b = Button(root, text="Next", command=next_piece)
 
    tk_n = IntVar()
-   def on_set_n(*args):
+   def on_set_n(name1: str, name2: str, op: str) -> None:
       global results
-      next_b.config(state="active")
       results = polyominoes(tk_n.get())
+      next_b.config(state="active")
+
    tk_n.trace("w", on_set_n)
    sb = Spinbox(root, from_=1, to = 20, textvariable=tk_n)
    tk_n.set(5)
@@ -340,13 +358,13 @@ if __name__ == "__main__":
 
    field = None
    selected = None
-   figures = {}
-   def combine(n):
+   figures: Dict[str, Field] = {}
+   def combine(n: int) -> Callback:
       zy = n * a
-      def callback(e):
+      def callback(e: Event) -> None:
          cmb = Toplevel(root)
          #cmb.grab_set()
-         def on_close():
+         def on_close() -> None:
             #cmb.grab_release()
             cmb.destroy()
          cmb.protocol('WM_DELETE_WINDOW', on_close)
@@ -358,8 +376,8 @@ if __name__ == "__main__":
          prvw.bind("<B1-Motion>", lambda e: prvw.scan_dragto(e.x, e.y, gain=1))
          tk_m = IntVar()
          
-         def wrapper(tag):
-            def toggle_selection(e):
+         def wrapper(tag: str) -> Callback:
+            def toggle_selection(e: Event) -> None:
                global selected
                selected = tag
                for i in cmbca.find_all():
@@ -369,7 +387,7 @@ if __name__ == "__main__":
                cmbca.tag_raise(selected)
             return toggle_selection
          
-         def pl():
+         def pl() -> None:
             global field, selected
             selected = None
             cmbca.delete('all')
@@ -401,10 +419,11 @@ if __name__ == "__main__":
             previewb['state'] = 'normal'
             exportb['state'] = 'normal'
          
-         def export():
-            from tkinter import filedialog
+         def export() -> None:
             fn = filedialog.asksaveasfilename(defaultextension=".txt", initialfile="puzzle.txt", parent=cmb, title="Append figure to file")
             if fn:
+               if field is None:
+                  raise ValueError("Forgot to initialize 'field', this is a bug")
                contours = field_to_contours(field)
                with open(fn, 'a') as f:
                   f.write('new <Vector.<Vertex>>[')
@@ -414,9 +433,10 @@ if __name__ == "__main__":
                      f.write('],')
                   f.write("]\n")
          
-         def preview():
-            from random import randint
+         def preview() -> None:
             prvw.delete("all")
+            if field is None:
+               raise ValueError("Forgot to initialize 'field', this is a bug")
             contours = field_to_contours(field)
             for contour in contours:
                color = "#{:03x}".format(randint(0,4095))
@@ -441,12 +461,12 @@ if __name__ == "__main__":
          previewb.grid(row=2, column=3)
          exportb.grid(row=2, column=4)
          
-         def transform(kind):
-            from copy import deepcopy
-            from warnings import warn
-            def callback(e):
+         def transform(kind: str) -> Callback:
+            def callback(e: Event) -> None:
                global field, figures
-               backup = [deepcopy(field), deepcopy(figures)]
+               if field is None:
+                  raise ValueError("Forgot to initialize 'field', this is a bug")
+               backup = deepcopy(field), deepcopy(figures)
                if selected:
                   for x, y, cell in figures[selected]:
                      if field[y][x] == 6:
@@ -462,7 +482,7 @@ if __name__ == "__main__":
                         figures[selected][i][1] += dy
                   else:
                      xs, ys = [x for x, y, __ in figures[selected]], [y for x, y, __ in figures[selected]]
-                     center_x, center_y = min(xs) + (max(xs) - min(xs)) / 2, min(ys) + (max(ys) - min(ys)) / 2
+                     center_x, center_y = min(xs) + (max(xs) - min(xs)) // 2, min(ys) + (max(ys) - min(ys)) // 2
                      for i in range(n):
                         figures[selected][i][0] -= center_x
                         figures[selected][i][1] -= center_y
