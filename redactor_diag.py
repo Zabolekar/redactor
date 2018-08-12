@@ -5,107 +5,12 @@ from math import sqrt, floor, ceil
 from copy import deepcopy
 from warnings import warn
 from random import randint
-from redactor import (no_empty_rows_cols, get_dims, fill,
+from redactor import (no_empty_rows_cols, get_dims, fill, polyominoes,
                       Vertex, Contour, Contours, Row, Field, Callback)
 
-def connected(t: Tuple[int, ...], n: int, H: int, W: int) -> bool:
-   """
-   '  '	0
-   '|/'	1
-   '/|'	2
-   '\|'	3
-   '|\'	4
-   '|_|'	5
-   """
-   t_mutable = list(t)
-   def fill4(x: int, y: int) -> None:
-      xy = x+W*y
-      if t_mutable[xy] > 0:
-         me = t_mutable[xy]
-         t_mutable[xy] = -t_mutable[xy]
-         if y+1 < H:
-            nb = t_mutable[x+W*(y+1)] #test neighbor
-            if me in(2,4,5) and nb in (1,3,5):
-               fill4(x, y+1)
-         if 0 < y:
-            nb = t_mutable[x+W*(y-1)]
-            if me in (1,3,5) and nb in (2,4,5):
-               fill4(x, y-1)
-         if 0 < x:
-            nb = t_mutable[(x-1)+W*y]
-            if me in (1,4,5) and nb in (2,3,5):
-               fill4(x-1, y)
-         if x+1 < W:
-            nb = t_mutable[(x+1)+W*y]
-            if me in (2,3,5) and nb in (1,4,5):
-               fill4(x+1, y)
-
-   for i,c in enumerate(t):
-      if c:
-         break
-
-   fill4(i%W, i//W)
-   result = len([c for c in t_mutable if c < 0]) == n
-   return result
-   
-def polyominoes(n: int) -> Iterator[Field]:
-   """
-   Numbering:
-   0 1 2
-   3 4 5
-   6 7 8
-   9 10 11
-
-   00 10 20
-   01 11 21
-   02 12 22
-   03 13 23
-   """
-   result: Set[Field] = set()
-   for H in range(ceil(sqrt(n)), n + 1):
-      for W in range(ceil(n/H), min([n + 1 - H, H]) + 1):  # W <= H and W*H >= n and W-1+H-1 <= n-1
-         for t in product(range(6), repeat=H * W):
-            if sum(1 for i in t if i) == n and no_empty_rows_cols(t, H, W) and connected(t, n, H, W):
-               polyomino = [[t[x + W * y] for x in range(W)] for y in range(H)]
-               # TODO: maybe profile how much time is actually spent here with checking the symmetries
-               # ESPECIALLY for longer lists towards their end
-               v_reflected = v_reflect(polyomino)
-               if v_reflected in result:
-                  continue
-               h_reflected = h_reflect(polyomino)
-               if h_reflected in result:
-                  continue
-               vh_reflected = h_reflect(v_reflected)
-               if vh_reflected in result:
-                  continue
-               # if it is square, then additionally check rotations of every one of the four by 90
-               if len(polyomino) == len(polyomino[0]):
-                  if rotate(polyomino) in result:
-                     continue
-                  if rotate(v_reflected) in result:
-                     continue
-                  if rotate(h_reflected) in result:
-                     continue
-                  if rotate(vh_reflected) in result:
-                     continue
-               # finally, if we didn't find any transformation of it in our list
-               result.add(polyomino)
-               yield polyomino
-
-def rotate(matrix: Field) -> Field:
-   "rotates by 90 degrees clockwise"
-   d = {0:0, 1:3, 2:4, 3:2, 4:1, 5:5}
-   return [[d[elem] for elem in row[::-1]] for row in zip(*matrix)]
-
-def v_reflect(matrix: Field) -> Field:
-   "reflects across the vertical axis"
-   d = {0:0, 1:3, 2:4, 3:1, 4:2, 5:5}
-   return [[d[elem] for elem in row[::-1]] for row in matrix]
-
-def h_reflect(matrix: Field) -> Field:
-   "reflects across the horizontal axis"
-   d = {0:0, 1:4, 2:3, 3:2, 4:1, 5:5}
-   return [[d[elem] for elem in row] for row in matrix[::-1]]
+import redactor
+redactor.DIAG = True
+redactor.EAGER = False
 
 ######################################################
 ##### Neither generation-related nor GUI-related #####
@@ -348,7 +253,7 @@ if __name__ == "__main__":
 
    tk_n.trace("w", on_set_n)
    sb = Spinbox(root, from_=1, to = 20, textvariable=tk_n)
-   tk_n.set(5)
+   tk_n.set(4)
    
    # layout
    ca.grid(row=0, column=0, columnspan=2)

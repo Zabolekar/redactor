@@ -7,6 +7,7 @@ from warnings import warn
 from io import StringIO
 from enum import Enum
 
+DIAG = False
 EAGER = True
 
 # type aliases
@@ -58,14 +59,36 @@ def connected(t: Tuple[int, ...], n: int, H: int, W: int) -> bool:
             fill4(x-1, y)
          if x+1 < W and t_mutable[(x+1)+W*y]:
             fill4(x+1, y)
+            
+   def fill4_diag(x: int, y: int) -> None:
+      xy = x+W*y
+      if t_mutable[xy] > 0:
+         me = t_mutable[xy]
+         t_mutable[xy] = -t_mutable[xy]
+         if y+1 < H:
+            nb = t_mutable[x+W*(y+1)] #test neighbor
+            if me in (2,4,5) and nb in (1,3,5):
+               fill4_diag(x, y+1)
+         if 0 < y:
+            nb = t_mutable[x+W*(y-1)]
+            if me in (1,3,5) and nb in (2,4,5):
+               fill4_diag(x, y-1)
+         if 0 < x:
+            nb = t_mutable[(x-1)+W*y]
+            if me in (1,4,5) and nb in (2,3,5):
+               fill4_diag(x-1, y)
+         if x+1 < W:
+            nb = t_mutable[(x+1)+W*y]
+            if me in (2,3,5) and nb in (1,4,5):
+               fill4_diag(x+1, y)
 
    for i, c in enumerate(t):
       if c:
          break
 
-   fill4(i%W, i//W)
+   (fill4_diag if DIAG else fill4)(i%W, i//W)
 
-   return len([c for c in t_mutable if c == 2]) == n
+   return len([c for c in t_mutable if ((c < 0) if DIAG else (c == 2))]) == n
 
 def polyominoes(n: int) -> Iterator[Field]:
    """
@@ -83,10 +106,12 @@ def polyominoes(n: int) -> Iterator[Field]:
    results: List[Field] = []
    for H in range(ceil(sqrt(n)), n + 1):
       for W in range(ceil(n/H), min([n + 1 - H, H]) + 1):  # W <= H and W*H >= n and W-1+H-1 <= n-1
-         for t in product([0, 1], repeat=H * W):
-            if sum(t) == n and no_empty_rows_cols(t, H, W) and connected(t, n, H, W):
+         for t in product(range(6 if DIAG else 2), repeat=H * W):
+            if sum(map(bool, t)) == n and no_empty_rows_cols(t, H, W) and connected(t, n, H, W):
                polyomino = [[t[x + W * y] for x in range(W)] for y in range(H)]
                # check symmetries
+               # TODO: profile how much time is actually spent here checking the symmetries
+               # ESPECIALLY for longer lists towards their end
                v_reflected = v_reflect(polyomino)
                if v_reflected in results:
                   continue
@@ -110,17 +135,21 @@ def polyominoes(n: int) -> Iterator[Field]:
                results.append(polyomino)
                yield polyomino
 
+# TODO: after merging diags and non-diags extract duplicate code here; profile before and after
 def rotate(matrix: Field) -> Field:
-   "rotates by 90 degrees"
-   return [list(row[::-1]) for row in zip(*matrix)]
+   "rotates by 90 degrees clockwise"
+   d = {0:0, 1:3, 2:4, 3:2, 4:1, 5:5} if DIAG else {0:0, 1:1}
+   return [[d[elem] for elem in row[::-1]] for row in zip(*matrix)]
 
 def v_reflect(matrix: Field) -> Field:
    "reflects across the vertical axis"
-   return [row[::-1] for row in matrix]
+   d = {0:0, 1:3, 2:4, 3:2, 4:1, 5:5} if DIAG else {0:0, 1:1}
+   return [[d[elem] for elem in row[::-1]] for row in matrix]
 
 def h_reflect(matrix: Field) -> Field:
    "reflects across the horizontal axis"
-   return matrix[::-1]
+   d = {0:0, 1:3, 2:4, 3:2, 4:1, 5:5} if DIAG else {0:0, 1:1}
+   return [[d[elem] for elem in row] for row in matrix[::-1]]
 
 ######################################################
 ##### Neither generation-related nor GUI-related #####
