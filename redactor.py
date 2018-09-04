@@ -49,8 +49,8 @@ def connected(t: Tuple[int, ...], n: int, H: int, W: int) -> bool:
 
    def fill4(x: int, y: int) -> None:
       xy = x+W*y
-      if t_mutable[xy] == 1:
-         t_mutable[xy] = 2
+      if t_mutable[xy] > 0:
+         t_mutable[xy] = -t_mutable[xy]
          if y+1 < H and t_mutable[x+W*(y+1)]:
             fill4(x, y+1)
          if y > 0 and t_mutable[x+W*(y-1)]:
@@ -60,6 +60,7 @@ def connected(t: Tuple[int, ...], n: int, H: int, W: int) -> bool:
          if x+1 < W and t_mutable[(x+1)+W*y]:
             fill4(x+1, y)
             
+   # TODO: unify with fill4
    def fill4_diag(x: int, y: int) -> None:
       xy = x+W*y
       if t_mutable[xy] > 0:
@@ -88,7 +89,7 @@ def connected(t: Tuple[int, ...], n: int, H: int, W: int) -> bool:
 
    (fill4_diag if DIAG else fill4)(i%W, i//W)
 
-   return len([c for c in t_mutable if ((c < 0) if DIAG else (c == 2))]) == n
+   return len([c for c in t_mutable if c < 0]) == n
 
 def polyominoes(n: int) -> Iterator[Field]:
    """

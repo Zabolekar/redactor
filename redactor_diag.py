@@ -27,7 +27,7 @@ def find_zeroth_vertex(field: Field) -> Optional[Tuple[int, int]]:
                print("START AT", quadruple)
                return j, i
    return None
-   
+
 def normalize_quadruple(quadruple: List[int]) -> None:
    """THIS FUNCTION MUTATES ITS ARGUMENT"""
    # Validate quadruple, just in case:
