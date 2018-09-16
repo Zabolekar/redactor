@@ -10,11 +10,33 @@ from enum import Enum
 DIAG = False
 EAGER = True
 
+class Cell(Enum):
+   """
+   0 1 2 3 4 5 can be generated directly,
+   6 7 can only appear when multiple figures are combined
+   """
+   EMPTY = 0 # __
+   LEFT_UPPER = 1 # |/
+   RIGHT_LOWER = 2 # /|
+   RIGHT_UPPER = 3 # \|
+   LEFT_LOWER = 4 # |\
+   FULL = 5 # |_|
+   LEFT_UPPER_RIGHT_LOWER = 6 # |/|
+   RIGHT_UPPER_LEFT_LOWER = 7 # |\|
+
+   def __bool__(self) -> bool:
+      raise TypeError("Please compare with Cell.Empty explicitly")
+
+if DIAG:
+   generatable = [Cell(i) for i in range(6)]
+else:
+   generatable = [Cell.EMPTY, Cell.FULL]
+
 # type aliases
 Vertex = Tuple[int, int]
 Contour = List[Vertex]
 Contours = List[Contour]
-Row = List[int]
+Row = List[Cell]
 Field = List[Row]
 Callback = Callable[[Event], None]
 
@@ -33,19 +55,21 @@ class Transformation(Enum):
          self.dx = {1: 0, 2: 0, 3: -1, 4: 1}[value]
          self.dy = {1: -1, 2: 1, 3: 0, 4: 0}[value]
 
+# TODO: the following comments are probably outdated now that we have enums
 # we use sum because diagonals have not only 0 and 1
 # for squares without diagonals "if 1 in t[..." would suffice in both cases
-def no_empty_rows_cols(t: Tuple[int, ...], H: int, W: int) -> bool:
+def no_empty_rows_cols(t: Tuple[Cell, ...], H: int, W: int) -> bool:
    for row in range(H):
-      if not sum(t[(row * W):((row + 1) * W)]):
+      if all(cell is Cell.EMPTY for cell in t[(row * W):((row + 1) * W)]):
          return False
    for col in range(W):
-      if not sum(t[col::W]):
+      if all(cell is Cell.EMPTY for cell in t[col::W]):
          return False
    return True
 
-def connected(t: Tuple[int, ...], n: int, H: int, W: int) -> bool:
-   t_mutable = list(t)
+def connected(t: Tuple[Cell, ...], n: int, H: int, W: int) -> bool:
+
+   t_mutable: List[int] = [cell.value for cell in t]
 
    def fill4(x: int, y: int) -> None:
       xy = x+W*y
@@ -59,7 +83,7 @@ def connected(t: Tuple[int, ...], n: int, H: int, W: int) -> bool:
             fill4(x-1, y)
          if x+1 < W and t_mutable[(x+1)+W*y]:
             fill4(x+1, y)
-            
+
    # TODO: unify with fill4
    def fill4_diag(x: int, y: int) -> None:
       xy = x+W*y
@@ -84,7 +108,7 @@ def connected(t: Tuple[int, ...], n: int, H: int, W: int) -> bool:
                fill4_diag(x+1, y)
 
    for i, c in enumerate(t):
-      if c:
+      if c is not Cell.EMPTY:
          break
 
    (fill4_diag if DIAG else fill4)(i%W, i//W)
@@ -107,8 +131,8 @@ def polyominoes(n: int) -> Iterator[Field]:
    results: List[Field] = []
    for H in range(ceil(sqrt(n)), n + 1):
       for W in range(ceil(n/H), min([n + 1 - H, H]) + 1):  # W <= H and W*H >= n and W-1+H-1 <= n-1
-         for t in product(range(6 if DIAG else 2), repeat=H * W):
-            if sum(map(bool, t)) == n and no_empty_rows_cols(t, H, W) and connected(t, n, H, W):
+         for t in product(generatable, repeat=H * W):
+            if sum(map(lambda cell: cell is not Cell.EMPTY, t)) == n and no_empty_rows_cols(t, H, W) and connected(t, n, H, W):
                polyomino = [[t[x + W * y] for x in range(W)] for y in range(H)]
                # check symmetries
                # TODO: profile how much time is actually spent here checking the symmetries
@@ -136,20 +160,51 @@ def polyominoes(n: int) -> Iterator[Field]:
                results.append(polyomino)
                yield polyomino
 
+# URGENT TODO: d seems to be identical in all three functions, but it shouldn't!
+# HOW AND WHY DOES IT EVEN WORK WITH DIAGS? it is plain wrong
 # TODO: after merging diags and non-diags extract duplicate code here; profile before and after
+# TODO: and also extract all d-assignments because DIAG never changes during a run
+# it should probably be three (or six) dicts, one (or two) for every function
 def rotate(matrix: Field) -> Field:
    "rotates by 90 degrees clockwise"
-   d = {0:0, 1:3, 2:4, 3:2, 4:1, 5:5} if DIAG else {0:0, 1:1}
+   if DIAG:
+      d = {Cell.EMPTY: Cell.EMPTY,
+           Cell.LEFT_UPPER: Cell.RIGHT_UPPER,
+           Cell.RIGHT_LOWER: Cell.LEFT_LOWER,
+           Cell.RIGHT_UPPER: Cell.RIGHT_LOWER,
+           Cell.LEFT_LOWER: Cell.LEFT_UPPER,
+           Cell.FULL: Cell.FULL}
+   else:
+      d = {Cell.EMPTY: Cell.EMPTY,
+           Cell.FULL: Cell.FULL}
    return [[d[elem] for elem in row[::-1]] for row in zip(*matrix)]
 
 def v_reflect(matrix: Field) -> Field:
    "reflects across the vertical axis"
-   d = {0:0, 1:3, 2:4, 3:2, 4:1, 5:5} if DIAG else {0:0, 1:1}
+   if DIAG:
+      d = {Cell.EMPTY: Cell.EMPTY,
+           Cell.LEFT_UPPER: Cell.RIGHT_UPPER,
+           Cell.RIGHT_LOWER: Cell.LEFT_LOWER,
+           Cell.RIGHT_UPPER: Cell.RIGHT_LOWER,
+           Cell.LEFT_LOWER: Cell.LEFT_UPPER,
+           Cell.FULL: Cell.FULL}
+   else:
+      d = {Cell.EMPTY: Cell.EMPTY,
+           Cell.FULL: Cell.FULL}
    return [[d[elem] for elem in row[::-1]] for row in matrix]
 
 def h_reflect(matrix: Field) -> Field:
    "reflects across the horizontal axis"
-   d = {0:0, 1:3, 2:4, 3:2, 4:1, 5:5} if DIAG else {0:0, 1:1}
+   if DIAG:
+      d = {Cell.EMPTY: Cell.EMPTY,
+           Cell.LEFT_UPPER: Cell.RIGHT_UPPER,
+           Cell.RIGHT_LOWER: Cell.LEFT_LOWER,
+           Cell.RIGHT_UPPER: Cell.RIGHT_LOWER,
+           Cell.LEFT_LOWER: Cell.LEFT_UPPER,
+           Cell.FULL: Cell.FULL}
+   else:
+      d = {Cell.EMPTY: Cell.EMPTY,
+           Cell.FULL: Cell.FULL}
    return [[d[elem] for elem in row] for row in matrix[::-1]]
 
 ######################################################
@@ -168,10 +223,7 @@ def print_field(field: Field) -> None:
    print("\n".join("".join('#' if cell else ' ' for cell in row) for row in field[i:j]))
    print("\n\n")
 
-def fill(field: Field, y: int, x: int, new_value: int) -> Field:
-   # new_value can be 0 or 1 in polyominoes without diagonals, 0 or 5 with diagonals.
-   # 0 means empty. 1 or 5 means full.
-   # TODO: fix this inconsistency
+def fill(field: Field, y: int, x: int, new_value: Cell) -> Field:
    nrows, ncols = get_dims(field)
    old_value = field[y][x]
    auxiliary_field = [['unchecked' for __ in row] for row in field]
@@ -227,7 +279,7 @@ def field_to_contours(field: Field) -> Contours:
    # adding an empty top row, an empty bottom row, an empty right column and an empty left column
    # this is done to make sure the outer empty part (without the holes) is contiguous
    nrows, ncols = len(field) + 2, len(field[0]) + 2
-   field = [[0] * ncols] + [[0] + row + [0] for row in field] + [[0] * ncols]
+   field = [[Cell.EMPTY] * ncols] + [[Cell.EMPTY] + row + [Cell.EMPTY] for row in field] + [[Cell.EMPTY] * ncols]
 
    # inner function to get one of the contours
    def field_to_one_contour(field: Field) -> Contour:
@@ -373,13 +425,13 @@ def field_to_contours(field: Field) -> Contours:
    contours = [outer]
 
    # fill the outer blank space, then invert
-   holes_inverted = [[{1:0, 0:1}[i] for i in row] for row in fill(field, 0, 0, 1)]
+   holes_inverted = [[{Cell.FULL: Cell.EMPTY, Cell.EMPTY: Cell.FULL}[i] for i in row] for row in fill(field, 0, 0, Cell.FULL)]
 
    # actually find the holes and add them (reversed) to contours
-   while sum(map(sum, holes_inverted)):
+   while any(cell != Cell.EMPTY for row in holes_inverted for cell in row):
       contour = field_to_one_contour(holes_inverted)
       j, i = contour[0]
-      holes_inverted = fill(holes_inverted, i, j, 0)
+      holes_inverted = fill(holes_inverted, i, j, Cell.EMPTY)
       contours.append(list(reversed(contour)))
 
    centered = [[(x - meanX, y - meanY) for x, y in contour] for contour in contours]
@@ -438,7 +490,7 @@ if __name__ == "__main__":
 
          for i, row in enumerate(result):
             for j, cell in enumerate(row):
-               if cell:
+               if cell is not Cell.EMPTY:
                   ca.create_rectangle(zx + j * a,
                                       zy + i * a,
                                       zx + j * a + a,
@@ -492,7 +544,8 @@ if __name__ == "__main__":
 
    field: Optional[Field] = None
    selected: Optional[str] = None
-   figures: Dict[str, Field] = {}
+   figures: Dict[str, List[List[int]]] = {} # TODO: what exactly does it contain? document it
+
    def combine(n: int, result: Field) -> Callback:
       zy = n * a
       def callback(__: Event) -> None:
@@ -524,7 +577,7 @@ if __name__ == "__main__":
             cmbca.xview_moveto(0)
             cmbca.yview_moveto(0)
             m = tk_m.get()
-            field = [[0 for __ in range(n * m)] for __ in range(n * m)]
+            field = [[Cell.EMPTY for __ in range(n * m)] for __ in range(n * m)]
             zx, zn = 0, 0
             while m:
                tag = f"m{m}"
@@ -532,14 +585,14 @@ if __name__ == "__main__":
                zx += n * a
                for i, row in enumerate(result):
                   for j, cell in enumerate(row):
-                     if cell:
+                     if cell is not Cell.EMPTY:
                         cmbca.create_rectangle(zx + j * a,
                                                zy + i * a,
                                                zx + j * a + a,
                                                zy + i * a + a,
                                                fill="grey50",
                                                tags=tag)
-                        field[i][zn + j] = 1
+                        field[i][zn + j] = Cell.FULL
                         figures[tag].append([zn + j, i])
                         cmbca.tag_bind(tag, '<ButtonPress-1>', wrapper(tag=tag))
                         cmbca.tag_bind(tag, '<Enter>', lambda e, tag=tag:
@@ -587,7 +640,7 @@ if __name__ == "__main__":
                backup = deepcopy(field), deepcopy(figures)
                if selected is not None:
                   for x, y in figures[selected]:
-                     field[y][x] = 0
+                     field[y][x] = Cell.EMPTY
                   if kind.is_translation:
                      for i in range(n):
                         figures[selected][i][0] += kind.dx
@@ -617,14 +670,14 @@ if __name__ == "__main__":
                      try:
                         if x < 0 or y < 0:  # would violate field boundaries
                            raise IndexError
-                        if field[y][x]:
+                        if field[y][x] is not Cell.EMPTY:
                            # if it raises IndexError:
                            # it means y or x are too large
                            # and violate field boundaries
-                           # if field[y][x] is True:
+                           # if field[y][x] is not empty: # TODO: rethink in depth, especially diags
                            # it means collision with another figure
                            raise IndexError
-                        field[y][x] += 1
+                        field[y][x] = Cell.FULL # TODO: it needs a detailed comparison to redactor_diag.py
                      except IndexError:  # has violated boundaries in one way or another
                         field, figures = backup  # restoring
                         return

@@ -418,7 +418,7 @@ if __name__ == "__main__":
                            raise IndexError
                         if (cell, other) in [(1,2), (2,1)]:
                            field[y][x] = 6 # because 3 would be confused with another state
-                        else: #(0,n) (n,0) (3,4) (4,3)
+                        else: # (0,n) (n,0) (3,4) (4,3)
                            field[y][x] += cell
                      except IndexError:  # has disrespected boundaries in one way or another
                         field, figures = backup  # restoring
