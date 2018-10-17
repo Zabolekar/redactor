@@ -6,7 +6,7 @@ from copy import deepcopy
 from warnings import warn
 from random import randint
 from redactor import (no_empty_rows_cols, get_dims, fill, polyominoes, inversions,
-                      Cell, Hmm, Vertex, Contour, Contours, Row, Field, Callback)
+                      Cell, Hmm, Vertex, Contour, Contours, Row, Field, Callback, Transformation)
 
 import redactor
 redactor.DIAG = True
@@ -36,21 +36,21 @@ def normalize_quadruple(quadruple: List[Cell]) -> None:
    # There are 6^4 = 1296 possible quadruples to consider (although some of them, like 0000 or 5555, should never happen)
    # it would not be wise to list all of them as we did in older redactor versions, without diagonals
    # So we do it a bit differently:
-   if quadruple[0] == 1:
+   if quadruple[0] == Cell.LEFT_UPPER:
       quadruple[0] = Cell.EMPTY
-   elif quadruple[0] == 2:
+   elif quadruple[0] == Cell.RIGHT_LOWER:
       quadruple[0] = Cell.FULL
-   if quadruple[1] == 3:
+   if quadruple[1] == Cell.RIGHT_UPPER:
       quadruple[1] = Cell.EMPTY
-   elif quadruple[1] == 4:
+   elif quadruple[1] == Cell.LEFT_LOWER:
       quadruple[1] = Cell.FULL
-   if quadruple[2] == 3:
+   if quadruple[2] == Cell.RIGHT_UPPER:
       quadruple[2] = Cell.FULL
-   elif quadruple[2] == 4:
+   elif quadruple[2] == Cell.LEFT_LOWER:
       quadruple[2] = Cell.EMPTY
-   if quadruple[3] == 1:
+   if quadruple[3] == Cell.LEFT_UPPER:
       quadruple[3] = Cell.FULL
-   elif quadruple[3] == 2:
+   elif quadruple[3] == Cell.RIGHT_LOWER:
       quadruple[3] = Cell.EMPTY
    # now only 256 possible quadruples remain (and some of them should never happen)
 
@@ -207,15 +207,15 @@ if __name__ == "__main__":
    ca.bind("<B1-Motion>", lambda e: ca.scan_dragto(e.x, e.y, gain=1))
    
    def paint_cell(cell: Cell, canvas: Canvas, x0: int, y0: int, i: int, j: int, tag: str) -> None:
-      if cell == 5:
+      if cell == Cell.FULL:
          canvas.create_rectangle(x0+j*a, y0+i*a, x0+j*a+a, y0+i*a+a, fill="grey50", tags=tag)
-      elif cell == 4:
+      elif cell == Cell.LEFT_LOWER:
          canvas.create_polygon(x0+j*a, y0+i*a, x0+j*a, y0+i*a+a, x0+j*a+a, y0+i*a+a, fill="grey50", tags=tag, outline = "black")
-      elif cell == 3:
+      elif cell == Cell.RIGHT_UPPER:
          canvas.create_polygon(x0+j*a+a, y0+i*a, x0+j*a, y0+i*a, x0+j*a+a, y0+i*a+a, fill="grey50", tags=tag, outline = "black")
-      elif cell == 2:
+      elif cell == Cell.RIGHT_LOWER:
          canvas.create_polygon(x0+j*a+a, y0+i*a, x0+j*a, y0+i*a+a, x0+j*a+a, y0+i*a+a, fill="grey50", tags=tag, outline = "black")
-      elif cell == 1:
+      elif cell == Cell.LEFT_UPPER:
          canvas.create_polygon(x0+j*a, y0+i*a, x0+j*a+a, y0+i*a, x0+j*a, y0+i*a+a, fill="grey50", tags=tag, outline = "black")
 
    results: Optional[Iterator[Field]] = None # will turn into a polyominoes generator later
@@ -366,26 +366,24 @@ if __name__ == "__main__":
          previewb.grid(row=2, column=3)
          exportb.grid(row=2, column=4)
          
-         def transform(kind: str) -> Callback:
-            def callback(e: Event) -> None:
+         def transform(kind: Transformation) -> Callback:
+
+            def callback(__: Event) -> None:
                global field, figures
                if field is None:
                   raise ValueError("Forgot to initialize 'field', this is a bug")
                backup = deepcopy(field), deepcopy(figures)
-               if selected:
+               if selected is not None:
                   for o in figures[selected]:
                      if field[o.y][o.x] == Cell.LEFT_UPPER_RIGHT_LOWER:
                         field[o.y][o.x] = Cell(3 - o.cell.value) # because 6 can only appear if we superimpose 1 and 2, see below
                         # TODO: get rid of .value wherever possible
                      else:
                         field[o.y][o.x] = Cell(field[o.y][o.x].value - o.cell.value)
-                  is_translation = kind in ["up", "down", "left", "right"]
-                  if is_translation:
-                     dx = {"up": 0, "down": 0, "left":-1, "right": 1}[kind]
-                     dy = {"up":-1, "down": 1, "left": 0, "right": 0}[kind]               
+                  if kind.is_translation:
                      for i in range(n):
-                        figures[selected][i].x += dx
-                        figures[selected][i].y += dy
+                        figures[selected][i].x += kind.dx
+                        figures[selected][i].y += kind.dy
                   else:
                      xs = [o.x for o in figures[selected]]
                      ys = [o.y for o in figures[selected]]
@@ -394,7 +392,7 @@ if __name__ == "__main__":
                      for i in range(n):
                         figures[selected][i].x -= center_x
                         figures[selected][i].y -= center_y
-                     if kind == "rotate":
+                     if kind == Transformation.ROTATE:
                         d = {
                            Cell.EMPTY: Cell.EMPTY,
                            Cell.LEFT_UPPER: Cell.RIGHT_UPPER,
@@ -404,7 +402,7 @@ if __name__ == "__main__":
                            Cell.FULL: Cell.FULL
                         }
                         figures[selected] = [Hmm(-o.y, o.x, d[o.cell]) for o in figures[selected]]
-                     elif kind == "reflect|":
+                     elif kind == Transformation.REFLECT_OVER_VERTICAL_AXIS:
                         d = {
                            Cell.EMPTY: Cell.EMPTY,
                            Cell.LEFT_UPPER: Cell.RIGHT_UPPER,
@@ -414,7 +412,7 @@ if __name__ == "__main__":
                            Cell.FULL: Cell.FULL
                         }
                         figures[selected] = [Hmm(-o.x, o.y, d[o.cell]) for o in figures[selected]]
-                     elif kind == "reflect-":
+                     elif kind == Transformation.REFLECT_OVER_HORIZONTAL_AXIS:
                         d = {
                            Cell.EMPTY: Cell.EMPTY,
                            Cell.LEFT_UPPER: Cell.LEFT_LOWER,
@@ -447,8 +445,8 @@ if __name__ == "__main__":
                      except IndexError:  # has disrespected boundaries in one way or another
                         field, figures = backup  # restoring
                         return
-                  if is_translation:
-                     cmbca.move(selected, dx * a, dy * a)
+                  if kind.is_translation:
+                     cmbca.move(selected, kind.dx * a, kind.dy * a)
                   else:
                      cmbca.delete(selected)
                      for o in figures[selected]:
@@ -457,13 +455,14 @@ if __name__ == "__main__":
                         for item in cmbca.find_withtag(selected):
                            cmbca.itemconfig(item, width=2)
             return callback
-         cmb.bind('<Up>', transform("up"))
-         cmb.bind('<Down>', transform("down"))
-         cmb.bind('<Left>', transform("left"))
-         cmb.bind('<Right>', transform("right"))
-         cmb.bind('r', transform("rotate"))
-         cmb.bind('h', transform("reflect-"))
-         cmb.bind('v', transform("reflect|"))
+
+         cmb.bind('<Up>', transform(Transformation.UP))
+         cmb.bind('<Down>', transform(Transformation.DOWN))
+         cmb.bind('<Left>', transform(Transformation.LEFT))
+         cmb.bind('<Right>', transform(Transformation.RIGHT))
+         cmb.bind('r', transform(Transformation.ROTATE))
+         cmb.bind('h', transform(Transformation.REFLECT_OVER_HORIZONTAL_AXIS))
+         cmb.bind('v', transform(Transformation.REFLECT_OVER_VERTICAL_AXIS))
       return callback
 
    root.mainloop()

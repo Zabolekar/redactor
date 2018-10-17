@@ -1,5 +1,5 @@
 from tkinter import Tk, Toplevel, Canvas, Label, Spinbox, Button, IntVar, Event, filedialog, messagebox
-from typing import List, Tuple, Iterator, Callable, Dict, Optional, Union
+from typing import Any, List, Tuple, Iterator, Callable, Dict, Optional, Union
 from dataclasses import dataclass
 from itertools import product
 from math import sqrt, ceil
@@ -26,7 +26,22 @@ class Cell(Enum):
    RIGHT_UPPER_LEFT_LOWER = 7 # |\|
 
    def __bool__(self) -> bool:
-      raise TypeError("Please compare with Cell.Empty explicitly")
+      raise TypeError("To find out if a cell is empty compare it with Cell.EMPTY explicitly")
+   
+   def __eq__(self, other: Any) -> bool:
+      if isinstance(other, Cell):
+         return super().__eq__(other)
+      else:
+         raise TypeError("Please only compare cells to other cells")
+
+   def __ne__(self, other: Any) -> bool:
+      if isinstance(other, Cell):
+         return super().__ne__(other)
+      else:
+         raise TypeError("Please only compare cells to other cells")
+   
+   def __hash__(self) -> int:
+      return super().__hash__()
 
 if DIAG:
    generatable = [Cell(i) for i in range(6)]
