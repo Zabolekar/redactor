@@ -5,8 +5,8 @@ from math import sqrt, floor, ceil
 from copy import deepcopy
 from warnings import warn
 from random import randint
-from redactor import (no_empty_rows_cols, get_dims, fill, polyominoes,
-                      Vertex, Contour, Contours, Row, Field, Callback)
+from redactor import (no_empty_rows_cols, get_dims, fill, polyominoes, inversions,
+                      Cell, Hmm, Vertex, Contour, Contours, Row, Field, Callback)
 
 import redactor
 redactor.DIAG = True
@@ -20,7 +20,7 @@ def find_zeroth_vertex(field: Field) -> Optional[Tuple[int, int]]:
    # currently: find the leftmost of the uppermost filled cells
    for i, row in enumerate(field):
       for j, cell in enumerate(row):
-         if cell:
+         if cell is not Cell.EMPTY:
             quadruple = get_quadruple(field, i, j)
             normalize_quadruple(quadruple)
             if quadruple != [0,0,0,0]: # TODO: add other illegal starting points
@@ -28,7 +28,7 @@ def find_zeroth_vertex(field: Field) -> Optional[Tuple[int, int]]:
                return j, i
    return None
 
-def normalize_quadruple(quadruple: List[int]) -> None:
+def normalize_quadruple(quadruple: List[Cell]) -> None:
    """THIS FUNCTION MUTATES ITS ARGUMENT"""
    # Validate quadruple, just in case:
    if len(quadruple) != 4:
@@ -37,38 +37,38 @@ def normalize_quadruple(quadruple: List[int]) -> None:
    # it would not be wise to list all of them as we did in older redactor versions, without diagonals
    # So we do it a bit differently:
    if quadruple[0] == 1:
-      quadruple[0] = 0
+      quadruple[0] = Cell.EMPTY
    elif quadruple[0] == 2:
-      quadruple[0] = 5
+      quadruple[0] = Cell.FULL
    if quadruple[1] == 3:
-      quadruple[1] = 0
+      quadruple[1] = Cell.EMPTY
    elif quadruple[1] == 4:
-      quadruple[1] = 5
+      quadruple[1] = Cell.FULL
    if quadruple[2] == 3:
-      quadruple[2] = 5
+      quadruple[2] = Cell.FULL
    elif quadruple[2] == 4:
-      quadruple[2] = 0
+      quadruple[2] = Cell.EMPTY
    if quadruple[3] == 1:
-      quadruple[3] = 5
+      quadruple[3] = Cell.FULL
    elif quadruple[3] == 2:
-      quadruple[3] = 0
+      quadruple[3] = Cell.EMPTY
    # now only 256 possible quadruples remain (and some of them should never happen)
 
-def get_quadruple(field: Field, i: int, j: int) -> List[int]:
+def get_quadruple(field: Field, i: int, j: int) -> List[Cell]:
    nrows, ncols = get_dims(field)
-   return [field[i - 1][j - 1] if i > 0 and j > 0 else 0,
-           field[i - 1][j] if i > 0 and j < ncols else 0,
-           field[i][j - 1] if i < nrows and j > 0 else 0,
-           field[i][j] if i < nrows and j < ncols else 0]
+   return [field[i - 1][j - 1] if i > 0 and j > 0 else Cell.EMPTY,
+           field[i - 1][j] if i > 0 and j < ncols else Cell.EMPTY,
+           field[i][j - 1] if i < nrows and j > 0 else Cell.EMPTY,
+           field[i][j] if i < nrows and j < ncols else Cell.EMPTY]
 
 def field_to_contours(field: Field) -> Contours:
-   field = [[5 if i>5 else i for i in row] for row in field] # coercing 5,6,7 to 5
+   field = [[Cell.FULL if i in (Cell.LEFT_UPPER_RIGHT_LOWER, Cell.RIGHT_UPPER_LEFT_LOWER) else i for i in row] for row in field] # coercing full cells cut in two halfs to uncut full cells
    # TODO: check if connected
    
    # adding an empty top row, an empty bottom row, an empty right column and an empty left column
    # this is done to make sure the outer empty part (without the holes) is contiguous
    nrows, ncols = get_dims(field)
-   field = [[0] * (ncols+2)] + [[0] + row + [0] for row in field] + [[0] * (ncols+2)]
+   field = [[Cell.EMPTY] * (ncols+2)] + [[Cell.EMPTY] + row + [Cell.EMPTY] for row in field] + [[Cell.EMPTY] * (ncols+2)]
 
    # inner function to get one of the contours
    def field_to_one_contour(field: Field) -> Contour:
@@ -174,13 +174,13 @@ def field_to_contours(field: Field) -> Contours:
    contours = [outer]
             
    # fill the outer blank space, then invert
-   holes_inverted = [[{0:5, 1:2, 2:1, 3:4, 4:3, 5:0}[i] for i in row] for row in fill(field, 0, 0, 5)]
-
+   holes_inverted = [[inversions[cell] for cell in row] for row in fill(field, 0, 0, Cell.FULL)]
+   
    # actually find the holes and add them (reversed) to contours
-   while sum(map(sum, holes_inverted)):
+   while any(cell is not Cell.EMPTY for row in holes_inverted for cell in row):
       contour = field_to_one_contour(holes_inverted)
       j, i = contour[0]
-      holes_inverted = fill(holes_inverted, i, j, 0)
+      holes_inverted = fill(holes_inverted, i, j, Cell.EMPTY)
       contours.append(list(reversed(contour)))
    
    centered = [[(x - meanX, y - meanY) for x, y in contour] for contour in contours]
@@ -206,7 +206,7 @@ if __name__ == "__main__":
    ca.bind("<ButtonPress-1>", lambda e: ca.scan_mark(e.x, e.y))
    ca.bind("<B1-Motion>", lambda e: ca.scan_dragto(e.x, e.y, gain=1))
    
-   def paint_cell(cell: int, canvas: Canvas, x0: int, y0: int, i: int, j: int, tag: str) -> None:
+   def paint_cell(cell: Cell, canvas: Canvas, x0: int, y0: int, i: int, j: int, tag: str) -> None:
       if cell == 5:
          canvas.create_rectangle(x0+j*a, y0+i*a, x0+j*a+a, y0+i*a+a, fill="grey50", tags=tag)
       elif cell == 4:
@@ -261,9 +261,9 @@ if __name__ == "__main__":
    sb.grid(row=1, column=1, sticky="w")
    next_b.grid(row=1, column=2)
 
-   field = None
-   selected = None
-   figures: Dict[str, Field] = {}
+   field: Optional[Field] = None
+   selected: Optional[str] = None
+   figures: Dict[str, List[Hmm]] = {}
    def combine(n: int) -> Callback:
       zy = n * a
       def callback(e: Event) -> None:
@@ -299,7 +299,7 @@ if __name__ == "__main__":
             cmbca.xview_moveto(0)
             cmbca.yview_moveto(0)
             m = tk_m.get()
-            field = [[0 for __ in range(n * m)] for __ in range(n * m)]
+            field = [[Cell.EMPTY for __ in range(n * m)] for __ in range(n * m)]
             zx, zn = 0, 0
             while m:
                tag = "m{}".format(m)
@@ -307,10 +307,10 @@ if __name__ == "__main__":
                zx += n * a
                for i, row in enumerate(result):
                   for j, cell in enumerate(row):
-                     if cell:
+                     if cell is not Cell.EMPTY:
                         field[i][zn + j] = cell
                         paint_cell(cell, cmbca, zx, zy, i, j, tag)
-                        figures[tag].append([zn + j, i, cell])
+                        figures[tag].append(Hmm(zn + j, i, cell))
                cmbca.tag_bind(tag, '<ButtonPress-1>', wrapper(tag=tag))
                cmbca.tag_bind(tag, '<Enter>', lambda __, tag=tag:
                           [cmbca.itemconfig(i, fill="red")
@@ -373,53 +373,77 @@ if __name__ == "__main__":
                   raise ValueError("Forgot to initialize 'field', this is a bug")
                backup = deepcopy(field), deepcopy(figures)
                if selected:
-                  for x, y, cell in figures[selected]:
-                     if field[y][x] == 6:
-                        field[y][x] = 3-cell # because 6 can only appear if we superimpose 1 and 2, see below
+                  for o in figures[selected]:
+                     if field[o.y][o.x] == Cell.LEFT_UPPER_RIGHT_LOWER:
+                        field[o.y][o.x] = Cell(3 - o.cell.value) # because 6 can only appear if we superimpose 1 and 2, see below
+                        # TODO: get rid of .value wherever possible
                      else:
-                        field[y][x] -= cell
+                        field[o.y][o.x] = Cell(field[o.y][o.x].value - o.cell.value)
                   is_translation = kind in ["up", "down", "left", "right"]
                   if is_translation:
                      dx = {"up": 0, "down": 0, "left":-1, "right": 1}[kind]
                      dy = {"up":-1, "down": 1, "left": 0, "right": 0}[kind]               
                      for i in range(n):
-                        figures[selected][i][0] += dx
-                        figures[selected][i][1] += dy
+                        figures[selected][i].x += dx
+                        figures[selected][i].y += dy
                   else:
-                     xs, ys = [x for x, y, __ in figures[selected]], [y for x, y, __ in figures[selected]]
-                     center_x, center_y = min(xs) + (max(xs) - min(xs)) // 2, min(ys) + (max(ys) - min(ys)) // 2
+                     xs = [o.x for o in figures[selected]]
+                     ys = [o.y for o in figures[selected]]
+                     center_x = min(xs) + (max(xs) - min(xs)) // 2
+                     center_y = min(ys) + (max(ys) - min(ys)) // 2
                      for i in range(n):
-                        figures[selected][i][0] -= center_x
-                        figures[selected][i][1] -= center_y
+                        figures[selected][i].x -= center_x
+                        figures[selected][i].y -= center_y
                      if kind == "rotate":
-                        d = {0:0, 1:3, 2:4, 3:2, 4:1, 5:5}
-                        figures[selected] = [[-y, x, d[cell]] for x, y, cell in figures[selected]]
+                        d = {
+                           Cell.EMPTY: Cell.EMPTY,
+                           Cell.LEFT_UPPER: Cell.RIGHT_UPPER,
+                           Cell.RIGHT_LOWER: Cell.LEFT_LOWER,
+                           Cell.RIGHT_UPPER: Cell.RIGHT_LOWER,
+                           Cell.LEFT_LOWER: Cell.LEFT_UPPER,
+                           Cell.FULL: Cell.FULL
+                        }
+                        figures[selected] = [Hmm(-o.y, o.x, d[o.cell]) for o in figures[selected]]
                      elif kind == "reflect|":
-                        d = {0:0, 1:3, 2:4, 3:1, 4:2, 5:5}
-                        figures[selected] = [[-x, y, d[cell]] for x, y, cell in figures[selected]]
+                        d = {
+                           Cell.EMPTY: Cell.EMPTY,
+                           Cell.LEFT_UPPER: Cell.RIGHT_UPPER,
+                           Cell.RIGHT_LOWER: Cell.LEFT_LOWER,
+                           Cell.RIGHT_UPPER: Cell.LEFT_UPPER,
+                           Cell.LEFT_LOWER: Cell.RIGHT_LOWER,
+                           Cell.FULL: Cell.FULL
+                        }
+                        figures[selected] = [Hmm(-o.x, o.y, d[o.cell]) for o in figures[selected]]
                      elif kind == "reflect-":
-                        d = {0:0, 1:4, 2:3, 3:2, 4:1, 5:5}
-                        figures[selected] = [[x, -y, d[cell]] for x, y, cell in figures[selected]]
+                        d = {
+                           Cell.EMPTY: Cell.EMPTY,
+                           Cell.LEFT_UPPER: Cell.LEFT_LOWER,
+                           Cell.RIGHT_LOWER: Cell.RIGHT_UPPER,
+                           Cell.RIGHT_UPPER: Cell.RIGHT_LOWER,
+                           Cell.LEFT_LOWER: Cell.LEFT_UPPER,
+                           Cell.FULL: Cell.FULL
+                        }
+                        figures[selected] = [Hmm(o.x, -o.y, d[o.cell]) for o in figures[selected]]
                      else:
                         warn("Unknown transformation", RuntimeWarning)  # raising an exception in the middle of a transaction would be a bad idea
                      for i in range(n):
-                        figures[selected][i][0] = int(figures[selected][i][0] + center_x)
-                        figures[selected][i][1] = int(figures[selected][i][1] + center_y)
+                        figures[selected][i].x = int(figures[selected][i].x + center_x)
+                        figures[selected][i].y = int(figures[selected][i].y + center_y)
                   # validation
-                  for x, y, cell in figures[selected]:
+                  for o in figures[selected]:
                      try:
-                        if x < 0 or y < 0:  # would disrespect field boundaries
+                        if o.x < 0 or o.y < 0:  # would disrespect field boundaries
                            raise IndexError
-                        other = field[y][x]
+                        other = field[o.y][o.x]
                         # raises IndexError if y or x too large (so they disrespect field boundaries)
                         # and now we actually compare the two cells
                         # to find out if there is a collision with another figure
-                        if (cell, other) not in compatibles:
+                        if (o.cell, other) not in compatibles:
                            raise IndexError
-                        if (cell, other) in [(1,2), (2,1)]:
-                           field[y][x] = 6 # because 3 would be confused with another state
+                        if (o.cell, other) in [(1,2), (2,1)]:
+                           field[o.y][o.x] = Cell.LEFT_UPPER_RIGHT_LOWER # because RIGHT_UPPER would be confused with another state
                         else: # (0,n) (n,0) (3,4) (4,3)
-                           field[y][x] += cell
+                           field[o.y][o.x] = Cell(field[o.y][o.x].value + o.cell.value)
                      except IndexError:  # has disrespected boundaries in one way or another
                         field, figures = backup  # restoring
                         return
@@ -427,8 +451,8 @@ if __name__ == "__main__":
                      cmbca.move(selected, dx * a, dy * a)
                   else:
                      cmbca.delete(selected)
-                     for x, y, cell_type in figures[selected]:
-                        paint_cell(cell_type, cmbca, n*a, zy, y, x, selected)
+                     for o in figures[selected]:
+                        paint_cell(o.cell, cmbca, n*a, zy, o.y, o.x, selected)
                         cmbca.tag_raise(selected)
                         for item in cmbca.find_withtag(selected):
                            cmbca.itemconfig(item, width=2)

@@ -1,5 +1,6 @@
 from tkinter import Tk, Toplevel, Canvas, Label, Spinbox, Button, IntVar, Event, filedialog, messagebox
-from typing import List, Tuple, Iterator, Callable, Dict, Optional
+from typing import List, Tuple, Iterator, Callable, Dict, Optional, Union
+from dataclasses import dataclass
 from itertools import product
 from math import sqrt, ceil
 from copy import deepcopy
@@ -32,6 +33,15 @@ if DIAG:
 else:
    generatable = [Cell.EMPTY, Cell.FULL]
 
+inversions = {
+   Cell.EMPTY: Cell.FULL,
+   Cell.LEFT_UPPER: Cell.RIGHT_LOWER,
+   Cell.RIGHT_LOWER: Cell.LEFT_UPPER,
+   Cell.RIGHT_UPPER: Cell.LEFT_LOWER,
+   Cell.LEFT_LOWER: Cell.RIGHT_UPPER,
+   Cell.FULL: Cell.EMPTY
+} # only used in field_to_contours
+
 # type aliases
 Vertex = Tuple[int, int]
 Contour = List[Vertex]
@@ -39,6 +49,12 @@ Contours = List[Contour]
 Row = List[Cell]
 Field = List[Row]
 Callback = Callable[[Event], None]
+
+@dataclass
+class Hmm: # TODO: better name; what's its meaning?
+   x: int
+   y: int
+   cell: Cell = Cell.EMPTY # this field is rarely used, only for diagonals
 
 class Transformation(Enum):
    UP = 1
@@ -288,7 +304,7 @@ def field_to_contours(field: Field) -> Contours:
       for i, row in enumerate(field):
          if sum(row):
             for j, cell in enumerate(row):
-               if cell:
+               if cell is not Cell.EMPTY:
                   break_flag = True
                   break
          if break_flag:
@@ -425,10 +441,10 @@ def field_to_contours(field: Field) -> Contours:
    contours = [outer]
 
    # fill the outer blank space, then invert
-   holes_inverted = [[{Cell.FULL: Cell.EMPTY, Cell.EMPTY: Cell.FULL}[i] for i in row] for row in fill(field, 0, 0, Cell.FULL)]
+   holes_inverted = [[inversions[cell] for cell in row] for row in fill(field, 0, 0, Cell.FULL)]
 
    # actually find the holes and add them (reversed) to contours
-   while any(cell != Cell.EMPTY for row in holes_inverted for cell in row):
+   while any(cell is not Cell.EMPTY for row in holes_inverted for cell in row):
       contour = field_to_one_contour(holes_inverted)
       j, i = contour[0]
       holes_inverted = fill(holes_inverted, i, j, Cell.EMPTY)
@@ -544,7 +560,7 @@ if __name__ == "__main__":
 
    field: Optional[Field] = None
    selected: Optional[str] = None
-   figures: Dict[str, List[List[int]]] = {} # TODO: what exactly does it contain? document it
+   figures: Dict[str, List[Hmm]] = {}
 
    def combine(n: int, result: Field) -> Callback:
       zy = n * a
@@ -593,7 +609,7 @@ if __name__ == "__main__":
                                                fill="grey50",
                                                tags=tag)
                         field[i][zn + j] = Cell.FULL
-                        figures[tag].append([zn + j, i])
+                        figures[tag].append(Hmm(zn + j, i))
                         cmbca.tag_bind(tag, '<ButtonPress-1>', wrapper(tag=tag))
                         cmbca.tag_bind(tag, '<Enter>', lambda e, tag=tag:
                                    [cmbca.itemconfig(i, fill="red")
@@ -639,45 +655,45 @@ if __name__ == "__main__":
                   raise FieldNotInitialized
                backup = deepcopy(field), deepcopy(figures)
                if selected is not None:
-                  for x, y in figures[selected]:
-                     field[y][x] = Cell.EMPTY
+                  for o in figures[selected]:
+                     field[o.y][o.x] = Cell.EMPTY
                   if kind.is_translation:
                      for i in range(n):
-                        figures[selected][i][0] += kind.dx
-                        figures[selected][i][1] += kind.dy
+                        figures[selected][i].x += kind.dx
+                        figures[selected][i].y += kind.dy
                   else:
-                     xs = [x for x, y in figures[selected]]
-                     ys = [y for x, y in figures[selected]]
+                     xs = [o.x for o in figures[selected]]
+                     ys = [o.y for o in figures[selected]]
                      center_x = min(xs) + (max(xs) - min(xs)) // 2
                      center_y = min(ys) + (max(ys) - min(ys)) // 2
                      for i in range(n):
-                        figures[selected][i][0] -= center_x
-                        figures[selected][i][1] -= center_y
+                        figures[selected][i].x -= center_x
+                        figures[selected][i].y -= center_y
                      if kind == Transformation.ROTATE:
-                        figures[selected] = [[-y, x] for x, y in figures[selected]]
+                        figures[selected] = [Hmm(-o.y, o.x) for o in figures[selected]]
                      elif kind == Transformation.REFLECT_OVER_VERTICAL_AXIS:
-                        figures[selected] = [[-x, y] for x, y in figures[selected]]
+                        figures[selected] = [Hmm(-o.x, o.y) for o in figures[selected]]
                      elif kind == Transformation.REFLECT_OVER_HORIZONTAL_AXIS:
-                        figures[selected] = [[x, -y] for x, y in figures[selected]]
+                        figures[selected] = [Hmm(o.x, -o.y) for o in figures[selected]]
                      else: # should never happen
                         warn("Unknown transformation", RuntimeWarning)
                         # raising an exception in the middle of a transaction would be a bad idea
                      for i in range(n):
-                        figures[selected][i][0] = figures[selected][i][0] + center_x
-                        figures[selected][i][1] = figures[selected][i][1] + center_y
+                        figures[selected][i].x = figures[selected][i].x + center_x
+                        figures[selected][i].y = figures[selected][i].y + center_y
                   # validation
-                  for x, y in figures[selected]:
+                  for o in figures[selected]:
                      try:
-                        if x < 0 or y < 0:  # would violate field boundaries
+                        if o.x < 0 or o.y < 0:  # would violate field boundaries
                            raise IndexError
-                        if field[y][x] is not Cell.EMPTY:
+                        if field[o.y][o.x] is not Cell.EMPTY:
                            # if it raises IndexError:
                            # it means y or x are too large
                            # and violate field boundaries
                            # if field[y][x] is not empty: # TODO: rethink in depth, especially diags
                            # it means collision with another figure
                            raise IndexError
-                        field[y][x] = Cell.FULL # TODO: it needs a detailed comparison to redactor_diag.py
+                        field[o.y][o.x] = Cell.FULL # TODO: it needs a detailed comparison to redactor_diag.py
                      except IndexError:  # has violated boundaries in one way or another
                         field, figures = backup  # restoring
                         return
@@ -685,11 +701,11 @@ if __name__ == "__main__":
                      cmbca.move(selected, kind.dx * a, kind.dy * a)
                   else:
                      cmbca.delete(selected)
-                     for x, y in figures[selected]:
-                        cmbca.create_rectangle((n + x) * a,
-                                               y * a + zy,
-                                               (n + x + 1) * a,
-                                               (y + 1) * a + zy,
+                     for o in figures[selected]:
+                        cmbca.create_rectangle((n + o.x) * a,
+                                               o.y * a + zy,
+                                               (n + o.x + 1) * a,
+                                               (o.y + 1) * a + zy,
                                                fill="grey50",
                                                tags=selected)
                         for i in cmbca.find_withtag(selected):
