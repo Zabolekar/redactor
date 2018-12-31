@@ -1,5 +1,5 @@
 puzzle.txt
-fixit.png
 __pycache__/
 .mypy_cache/
 .pytest_cache/
+notes/
