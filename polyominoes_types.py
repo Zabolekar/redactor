@@ -42,7 +42,7 @@ Row = List[Cell]
 Field = List[Row]
 
 @dataclass
-class Hmm: # TODO: better name; what's its meaning?
+class PositionedCell:
    x: int
    y: int
    cell: Cell = Cell.EMPTY # this field is rarely used, only for diagonals

@@ -3,7 +3,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 from copy import deepcopy
 from warnings import warn
 from io import StringIO
-from polyominoes_types import Cell, Contours, Field, Hmm, Transformation
+from polyominoes_types import Cell, Contours, Field, PositionedCell, Transformation
 from polyominoes import polyominoes
 from field_to_contours import field_to_contours
 
@@ -134,7 +134,7 @@ if __name__ == "__main__":
 
    field: Optional[Field] = None
    selected: Optional[str] = None
-   figures: Dict[str, List[Hmm]] = {}
+   figures: Dict[str, List[PositionedCell]] = {}
 
    def combine(n: int, result: Field) -> Callback:
       zy = n * a
@@ -183,7 +183,7 @@ if __name__ == "__main__":
                                                fill="grey50",
                                                tags=tag)
                         field[i][zn + j] = Cell.FULL
-                        figures[tag].append(Hmm(zn + j, i))
+                        figures[tag].append(PositionedCell(zn + j, i))
                         cmbca.tag_bind(tag, '<ButtonPress-1>', wrapper(tag=tag))
                         cmbca.tag_bind(tag, '<Enter>', lambda e, tag=tag:
                                    [cmbca.itemconfig(i, fill="red")
@@ -245,11 +245,11 @@ if __name__ == "__main__":
                         figures[selected][i].x -= center_x
                         figures[selected][i].y -= center_y
                      if kind == Transformation.ROTATE:
-                        figures[selected] = [Hmm(-o.y, o.x) for o in figures[selected]]
+                        figures[selected] = [PositionedCell(-o.y, o.x) for o in figures[selected]]
                      elif kind == Transformation.REFLECT_OVER_VERTICAL_AXIS:
-                        figures[selected] = [Hmm(-o.x, o.y) for o in figures[selected]]
+                        figures[selected] = [PositionedCell(-o.x, o.y) for o in figures[selected]]
                      elif kind == Transformation.REFLECT_OVER_HORIZONTAL_AXIS:
-                        figures[selected] = [Hmm(o.x, -o.y) for o in figures[selected]]
+                        figures[selected] = [PositionedCell(o.x, -o.y) for o in figures[selected]]
                      else: # should never happen
                         warn("Unknown transformation", RuntimeWarning)
                         # raising an exception in the middle of a transaction would be a bad idea

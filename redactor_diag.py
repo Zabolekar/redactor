@@ -1,10 +1,10 @@
-from typing import Iterator, Set
+from typing import Iterator, Set, Tuple
 from math import floor
 from random import randint
 from field_to_contours_diag import field_to_contours
 from redactor import (FieldNotInitialized,
                       # some of them not defined but only imported there:
-                      Cell, Hmm, Field, Callback, Transformation,
+                      Cell, PositionedCell, Field, Callback, Transformation,
                       Tk, Toplevel, Canvas, Label, Spinbox, Button, IntVar, Event, filedialog, messagebox,
                       Dict, List, Optional,
                       deepcopy, warn)
@@ -18,7 +18,7 @@ polyominoes.generatable = [Cell(i) for i in range(6)] # ugly hack, should disapp
 ####################################### HERE COMES THE GUI ########################################
 ###################################################################################################
 
-compatibles = [(0,i) for i in range(1,6)]
+compatibles: List[Tuple[int, int]] = [(0,i) for i in range(1,6)]
 compatibles.extend([(1,2), (3,4)])
 compatibles.extend([(j,i) for (i,j) in compatibles])
 
@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
    field: Optional[Field] = None
    selected: Optional[str] = None
-   figures: Dict[str, List[Hmm]] = {}
+   figures: Dict[str, List[PositionedCell]] = {}
    def combine(n: int) -> Callback:
       zy = n * a
       def callback(e: Event) -> None:
@@ -138,7 +138,7 @@ if __name__ == "__main__":
                      if cell is not Cell.EMPTY:
                         field[i][zn + j] = cell
                         paint_cell(cell, cmbca, zx, zy, i, j, tag)
-                        figures[tag].append(Hmm(zn + j, i, cell))
+                        figures[tag].append(PositionedCell(zn + j, i, cell))
                cmbca.tag_bind(tag, '<ButtonPress-1>', wrapper(tag=tag))
                cmbca.tag_bind(tag, '<Enter>', lambda __, tag=tag:
                           [cmbca.itemconfig(i, fill="red")
@@ -153,7 +153,10 @@ if __name__ == "__main__":
             exportb['state'] = 'normal'
          
          def export() -> None:
-            fn = filedialog.asksaveasfilename(defaultextension=".txt", initialfile="puzzle.txt", parent=cmb, title="Append figure to file")
+            fn = filedialog.asksaveasfilename(defaultextension=".txt",
+                                              initialfile="puzzle.txt",
+                                              parent=cmb,
+                                              title="Append figure to file")
             if fn:
                if field is None:
                   raise ValueError("Forgot to initialize 'field', this is a bug")
@@ -202,6 +205,7 @@ if __name__ == "__main__":
                   raise FieldNotInitialized
                backup = deepcopy(field), deepcopy(figures)
                if selected is not None:
+                  o: PositionedCell
                   for o in figures[selected]:
                      if field[o.y][o.x] == Cell.LEFT_UPPER_RIGHT_LOWER:
                         field[o.y][o.x] = Cell(3 - o.cell.value) # because 6 can only appear if we superimpose 1 and 2, see below
@@ -229,7 +233,7 @@ if __name__ == "__main__":
                            Cell.LEFT_LOWER: Cell.LEFT_UPPER,
                            Cell.FULL: Cell.FULL
                         }
-                        figures[selected] = [Hmm(-o.y, o.x, d[o.cell]) for o in figures[selected]]
+                        figures[selected] = [PositionedCell(-o.y, o.x, d[o.cell]) for o in figures[selected]]
                      elif kind == Transformation.REFLECT_OVER_VERTICAL_AXIS:
                         d = {
                            Cell.EMPTY: Cell.EMPTY,
@@ -239,7 +243,7 @@ if __name__ == "__main__":
                            Cell.LEFT_LOWER: Cell.RIGHT_LOWER,
                            Cell.FULL: Cell.FULL
                         }
-                        figures[selected] = [Hmm(-o.x, o.y, d[o.cell]) for o in figures[selected]]
+                        figures[selected] = [PositionedCell(-o.x, o.y, d[o.cell]) for o in figures[selected]]
                      elif kind == Transformation.REFLECT_OVER_HORIZONTAL_AXIS:
                         d = {
                            Cell.EMPTY: Cell.EMPTY,
@@ -249,7 +253,7 @@ if __name__ == "__main__":
                            Cell.LEFT_LOWER: Cell.LEFT_UPPER,
                            Cell.FULL: Cell.FULL
                         }
-                        figures[selected] = [Hmm(o.x, -o.y, d[o.cell]) for o in figures[selected]]
+                        figures[selected] = [PositionedCell(o.x, -o.y, d[o.cell]) for o in figures[selected]]
                      else:
                         warn("Unknown transformation", RuntimeWarning)  # raising an exception in the middle of a transaction would be a bad idea
                      for i in range(n):
@@ -260,13 +264,13 @@ if __name__ == "__main__":
                      try:
                         if o.x < 0 or o.y < 0:  # would disrespect field boundaries
                            raise IndexError
-                        other = field[o.y][o.x]
+                        other: Cell = field[o.y][o.x]
                         # raises IndexError if y or x too large (so they disrespect field boundaries)
                         # and now we actually compare the two cells
                         # to find out if there is a collision with another figure
-                        if (o.cell, other) not in compatibles:
+                        if (o.cell.value, other.value) not in compatibles:
                            raise IndexError
-                        if (o.cell, other) in [(1,2), (2,1)]:
+                        if (o.cell.value, other.value) in [(1,2), (2,1)]:
                            field[o.y][o.x] = Cell.LEFT_UPPER_RIGHT_LOWER # because RIGHT_UPPER would be confused with another state
                         else: # (0,n) (n,0) (3,4) (4,3)
                            field[o.y][o.x] = Cell(field[o.y][o.x].value + o.cell.value)
