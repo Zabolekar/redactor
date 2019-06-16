@@ -1,7 +1,8 @@
-from typing import Tuple
+from typing import List, Tuple
+from enum import Enum
 from polyominoes_types import Cell, Field, Contour, Contours
 
-inversions = {
+inversions = { # this already is ok for use with diagonals
    Cell.EMPTY: Cell.FULL,
    Cell.LEFT_UPPER: Cell.RIGHT_LOWER,
    Cell.RIGHT_LOWER: Cell.LEFT_UPPER,
@@ -14,17 +15,21 @@ def get_dims(field: Field) -> Tuple[int, int]:
    nrows, ncols = len(field), len(field[0])
    return nrows, ncols
 
+class Status(Enum):
+   CHECKED = 0
+   TO_BE_CHECKED = 1
+   BEING_CHECKED = 2
+   UNCHECKED = 3
+
 def fill(field: Field, y: int, x: int, new_value: Cell) -> Field:
    nrows, ncols = get_dims(field)
    old_value = field[y][x]
-   auxiliary_field = [['unchecked' for __ in row] for row in field]
-   # auxiliary_field cell can have four distinct values:
-   # unchecked; about to be checked; being checked now; checked;
-   auxiliary_field[y][x] = 'being checked'
-   while sum('being checked' in row for row in auxiliary_field):
+   auxiliary_field: List[List[Status]] = [[Status.UNCHECKED for __ in row] for row in field]
+   auxiliary_field[y][x] = Status.BEING_CHECKED
+   while sum(Status.BEING_CHECKED in row for row in auxiliary_field):
       for y in range(nrows):
          for x in range(ncols):
-            if auxiliary_field[y][x] == 'being checked':
+            if auxiliary_field[y][x] == Status.BEING_CHECKED:
                neighbours = []
                # regular neighbours
                if y > 0:
@@ -45,18 +50,18 @@ def fill(field: Field, y: int, x: int, new_value: Cell) -> Field:
                if y + 1 < nrows and x + 1 < ncols:
                   neighbours.append((y + 1, x + 1))
                for ny, nx in neighbours:
-                  if auxiliary_field[ny][nx] == 'unchecked' and field[ny][nx] == old_value:
-                     auxiliary_field[ny][nx] = 'to be checked'
-               auxiliary_field[y][x] = 'checked'
+                  if auxiliary_field[ny][nx] == Status.UNCHECKED and field[ny][nx] == old_value:
+                     auxiliary_field[ny][nx] = Status.TO_BE_CHECKED
+               auxiliary_field[y][x] = Status.CHECKED
       for y in range(nrows):
          for x in range(ncols):
-            if auxiliary_field[y][x] == 'to be checked':
-               auxiliary_field[y][x] = 'being checked'
+            if auxiliary_field[y][x] == Status.TO_BE_CHECKED:
+               auxiliary_field[y][x] = Status.BEING_CHECKED
    result = [row[:] for row in field]  # copying
    # actually filling:
    for y in range(nrows):
       for x in range(ncols):
-         if auxiliary_field[y][x] == 'checked':
+         if auxiliary_field[y][x] == Status.CHECKED:
             result[y][x] = new_value
    return result
 

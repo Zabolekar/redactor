@@ -1,6 +1,51 @@
 from typing import List, Optional, Tuple
 from polyominoes_types import Cell, Contour, Contours, Field
-from field_to_contours import fill, get_dims, inversions
+from field_to_contours import get_dims, inversions, Status
+
+# TODO: is an almost exact copy from field_to_contours, diagonals don't work yet
+def fill(field: Field, y: int, x: int, new_value: Cell) -> Field:
+   nrows, ncols = get_dims(field)
+   old_value = field[y][x]
+   auxiliary_field: List[List[Status]] = [[Status.UNCHECKED for __ in row] for row in field]
+   auxiliary_field[y][x] = Status.BEING_CHECKED
+   while sum(Status.BEING_CHECKED in row for row in auxiliary_field):
+      for y in range(nrows):
+         for x in range(ncols):
+            if auxiliary_field[y][x] == Status.BEING_CHECKED:
+               neighbours = []
+               # regular neighbours
+               if y > 0:
+                  neighbours.append((y - 1, x))
+               if y + 1 < nrows:
+                  neighbours.append((y + 1, x))
+               if x > 0:
+                  neighbours.append((y, x - 1))
+               if x + 1 < ncols:
+                  neighbours.append((y, x + 1))
+               # diagonal neighbours
+               if y > 0 and x > 0:
+                  neighbours.append((y - 1, x - 1))
+               if y + 1 < nrows and x > 0:
+                  neighbours.append((y + 1, x - 1))
+               if y > 0 and x + 1 < ncols:
+                  neighbours.append((y - 1, x + 1))
+               if y + 1 < nrows and x + 1 < ncols:
+                  neighbours.append((y + 1, x + 1))
+               for ny, nx in neighbours:
+                  if auxiliary_field[ny][nx] == Status.UNCHECKED and field[ny][nx] == old_value:
+                     auxiliary_field[ny][nx] = Status.TO_BE_CHECKED
+               auxiliary_field[y][x] = Status.CHECKED
+      for y in range(nrows):
+         for x in range(ncols):
+            if auxiliary_field[y][x] == Status.TO_BE_CHECKED:
+               auxiliary_field[y][x] = Status.BEING_CHECKED
+   result = [row[:] for row in field]  # copying
+   # actually filling:
+   for y in range(nrows):
+      for x in range(ncols):
+         if auxiliary_field[y][x] == Status.CHECKED:
+            result[y][x] = new_value
+   return result
 
 def find_zeroth_vertex(field: Field) -> Optional[Tuple[int, int]]:
    # currently: find the leftmost of the uppermost filled cells
