@@ -40,15 +40,6 @@ def fill(field: Field, y: int, x: int, new_value: Cell) -> Field:
                   neighbours.append((y, x - 1))
                if x + 1 < ncols:
                   neighbours.append((y, x + 1))
-               # diagonal neighbours
-               if y > 0 and x > 0:
-                  neighbours.append((y - 1, x - 1))
-               if y + 1 < nrows and x > 0:
-                  neighbours.append((y + 1, x - 1))
-               if y > 0 and x + 1 < ncols:
-                  neighbours.append((y - 1, x + 1))
-               if y + 1 < nrows and x + 1 < ncols:
-                  neighbours.append((y + 1, x + 1))
                for ny, nx in neighbours:
                   if auxiliary_field[ny][nx] == Status.UNCHECKED and field[ny][nx] == old_value:
                      auxiliary_field[ny][nx] = Status.TO_BE_CHECKED
